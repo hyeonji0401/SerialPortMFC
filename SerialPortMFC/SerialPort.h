@@ -19,7 +19,8 @@ private:
 public:
     // 사용 가능한 시리얼 포트 목록을 반환하는 함수
     std::vector<std::string> GetAvailablePorts();
-    BOOL Connect(CString portName, DWORD baudRate, BYTE parity, BYTE dataBits, BYTE stopBits, BYTE flowControl);
+    BOOL Connect(CString portName, DCB& dcb, CWnd* pParent);
     void Disconnect();
     bool IsConnected();
+    BOOL Connect(CString portName, DCB& dcb);
 };

@@ -25,6 +25,8 @@ public:
 protected:
 	HICON m_hIcon;
 	CSerialPort m_serialPort;
+	COMMCONFIG m_commConfig;   //<< 포트 설정값을 저장할 구조체
+	BOOL m_bConfigSet;
 
 	// 생성된 메시지 맵 함수
 	virtual BOOL OnInitDialog();
@@ -34,10 +36,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 public:
 	CComboBox m_cmb_PortName;
-	CComboBox c_cmb_Baud;
-	CComboBox m_cmb_Data;
-	CComboBox m_cmb_Parity;
-	CComboBox m_cmb_Stop;
-	CComboBox m_cmb_Flow;
 	afx_msg void OnClickedBtnConnect();
+	CButton m_btn_setting;
+	afx_msg void OnClickedBtnSetting();
 };

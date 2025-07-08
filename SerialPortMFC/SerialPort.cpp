@@ -71,22 +71,22 @@ void CSerialPort::Disconnect()
     }
 }
 
-BOOL CSerialPort::Connect(CString portName, DWORD baudRate, BYTE parity, BYTE dataBits, BYTE stopBits, BYTE flowControl)
+BOOL CSerialPort::Connect(CString portName, DCB& dcb, CWnd* pParent)
 {
-    // 1. 이미 연결되어 있다면 해제
+    // 1. 기존 연결이 있다면 완전히 해제
     Disconnect();
 
-    // 2. 포트 열기
+    // 2. 포트 이름 포맷팅 및 열기
     CString formattedPortName;
     formattedPortName.Format(_T("\\\\.\\%s"), portName);
 
     m_hComm = CreateFile(
-        formattedPortName,                  // 포트 이름
-        GENERIC_READ | GENERIC_WRITE,       // 읽기/쓰기 모드
-        0,                                  // 공유 모드 (0 = 단독 사용)
-        NULL,                               // 보안 속성
-        OPEN_EXISTING,                      // 파일이 있을 때만 열기
-        FILE_ATTRIBUTE_NORMAL,              // 일반 파일 속성
+        formattedPortName,
+        GENERIC_READ | GENERIC_WRITE,
+        0,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
         NULL
     );
 
@@ -95,59 +95,27 @@ BOOL CSerialPort::Connect(CString portName, DWORD baudRate, BYTE parity, BYTE da
         return FALSE;
     }
 
-    // 3. 포트 설정 (DCB 구조체 사용)
-    DCB dcb;
-    memset(&dcb, 0, sizeof(DCB));
-    dcb.DCBlength = sizeof(DCB);
-
-    if (!GetCommState(m_hComm, &dcb)) {
-        Disconnect();
-        return FALSE; // 현재 상태 가져오기 실패
-    }
-
-    dcb.BaudRate = baudRate;    // 통신 속도
-    dcb.ByteSize = dataBits;    // 데이터 비트
-    dcb.Parity = parity;        // 패리티 (0:None, 1:Odd, 2:Even)
-    dcb.StopBits = stopBits;    // 스톱 비트 (0:1, 1:1.5, 2:2)
-    switch (flowControl)
-    {
-    case 0: // 0: None (흐름 제어 없음)
-        dcb.fOutxCtsFlow = FALSE;
-        dcb.fRtsControl = RTS_CONTROL_ENABLE;
-        dcb.fOutX = FALSE;
-        dcb.fInX = FALSE;
-        break;
-    case 1: // 1: Hardware (RTS/CTS)
-        dcb.fOutxCtsFlow = TRUE;
-        dcb.fRtsControl = RTS_CONTROL_HANDSHAKE;
-        dcb.fOutX = FALSE;
-        dcb.fInX = FALSE;
-        break;
-    case 2: // 2: Software (XON/XOFF)
-        dcb.fOutxCtsFlow = FALSE;
-        dcb.fRtsControl = RTS_CONTROL_ENABLE;
-        dcb.fOutX = TRUE;
-        dcb.fInX = TRUE;
-        break;
-    }
+    // 3. 인자로 받은 DCB로 포트 설정 적용
     if (!SetCommState(m_hComm, &dcb)) {
         Disconnect();
-        return FALSE; // 새 상태 설정 실패
+        return FALSE;
     }
 
-    // 4. 타임아웃 설정 
+    // 4. 통신 타임아웃 설정
     COMMTIMEOUTS timeouts;
     timeouts.ReadIntervalTimeout = MAXDWORD;
     timeouts.ReadTotalTimeoutMultiplier = 0;
-    timeouts.ReadTotalTimeoutConstant = 0;
+    timeouts.ReadTotalTimeoutConstant = 0; // 즉시 리턴하도록 설정
     timeouts.WriteTotalTimeoutMultiplier = 0;
     timeouts.WriteTotalTimeoutConstant = 0;
 
     if (!SetCommTimeouts(m_hComm, &timeouts)) {
         Disconnect();
-        return FALSE; // 타임아웃 설정 실패
+        return FALSE;
     }
 
-    m_bConnected = true; // 모든 설정이 성공하면 연결 상태로 변경
+  
+
+    m_bConnected = true;
     return TRUE;
 }

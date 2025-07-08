@@ -7,6 +7,8 @@
 #include "SerialPortMFC.h"
 #include "SerialPortMFCDlg.h"
 #include "afxdialogex.h"
+#include <winspool.h>   
+#pragma comment(lib, "winspool.lib")
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -54,17 +56,14 @@ CSerialPortMFCDlg::CSerialPortMFCDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_SERIALPORTMFC_DIALOG, pParent)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	m_bConfigSet = FALSE;
 }
 
 void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_COMBO_PORTNAME, m_cmb_PortName);
-	DDX_Control(pDX, IDC_COMBO_BAUD, c_cmb_Baud);
-	DDX_Control(pDX, IDC_COMBO_DATA, m_cmb_Data);
-	DDX_Control(pDX, IDC_COMBO_PARITY, m_cmb_Parity);
-	DDX_Control(pDX, IDC_COMBO_STOP, m_cmb_Stop);
-	DDX_Control(pDX, IDC_COMBO_FLOW, m_cmb_Flow);
+	DDX_Control(pDX, IDC_BTN_SETTING, m_btn_setting);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -72,6 +71,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BTN_CONNECT, &CSerialPortMFCDlg::OnClickedBtnConnect)
+	ON_BN_CLICKED(IDC_BTN_SETTING, &CSerialPortMFCDlg::OnClickedBtnSetting)
 END_MESSAGE_MAP()
 
 
@@ -123,35 +123,6 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 		m_cmb_PortName.SetCurSel(0);
 	}
 
-	//콤보 박스 초기화
-	c_cmb_Baud.AddString(_T("9600"));
-	c_cmb_Baud.AddString(_T("19200"));
-	c_cmb_Baud.AddString(_T("38400"));
-	c_cmb_Baud.AddString(_T("57600"));
-	c_cmb_Baud.AddString(_T("115200"));
-	c_cmb_Baud.SetCurSel(0); 
-
-	m_cmb_Data.AddString(_T("7"));
-	m_cmb_Data.AddString(_T("8"));
-	m_cmb_Data.SetCurSel(0);
-
-	m_cmb_Parity.AddString(_T("None"));
-	m_cmb_Parity.AddString(_T("Odd"));
-	m_cmb_Parity.AddString(_T("Even"));
-	m_cmb_Parity.AddString(_T("Mark"));
-	m_cmb_Parity.AddString(_T("Space"));
-	m_cmb_Parity.SetCurSel(0);
-
-	m_cmb_Stop.AddString(_T("1"));
-	m_cmb_Stop.AddString(_T("1.5"));
-	m_cmb_Stop.AddString(_T("2"));
-	m_cmb_Stop.SetCurSel(0);
-
-	m_cmb_Flow.AddString(_T("None"));
-	m_cmb_Flow.AddString(_T("hardware"));
-	m_cmb_Flow.AddString(_T("Xon/Xoff"));
-	m_cmb_Flow.SetCurSel(0);
-	
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
@@ -209,62 +180,44 @@ HCURSOR CSerialPortMFCDlg::OnQueryDragIcon()
 
 void CSerialPortMFCDlg::OnClickedBtnConnect()
 {
-	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	// 1. 이미 연결된 상태인지 확인 -> 그렇다면 연결 해제 수행
 	if (m_serialPort.IsConnected())
 	{
-		// --- 이미 연결된 상태일 경우 -> 연결 해제 로직 수행
 		m_serialPort.Disconnect();
 		AfxMessageBox(_T("연결을 해제했습니다."));
 
-		// 버튼 텍스트를 연결로 변경
+		// UI를 연결 전 상태로 복구
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
-
-		// 설정 컨트롤들을 다시 활성화
 		m_cmb_PortName.EnableWindow(TRUE);
-		c_cmb_Baud.EnableWindow(TRUE);
-		m_cmb_Data.EnableWindow(TRUE);
-		m_cmb_Parity.EnableWindow(TRUE);
-		m_cmb_Stop.EnableWindow(TRUE);
-		m_cmb_Flow.EnableWindow(TRUE);
+		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(TRUE);
 	}
 	else
 	{
-	
-		CString strPort, strBaud;
-		m_cmb_PortName.GetLBText(m_cmb_PortName.GetCurSel(), strPort);
-		c_cmb_Baud.GetLBText(c_cmb_Baud.GetCurSel(), strBaud);
-		DWORD dwBaud = _ttoi(strBaud);
+		// 2. 연결되지 않은 상태 -> 연결 시도
 
-		
-		CString strData;
-		m_cmb_Data.GetLBText(m_cmb_Data.GetCurSel(), strData);
-		BYTE byData = _ttoi(strData);
-
-		BYTE byParity = m_cmb_Parity.GetCurSel();
-
-			BYTE byStop;
-		int nStopIndex = m_cmb_Stop.GetCurSel();
-		switch (nStopIndex)
-		{
-		case 0: byStop = ONESTOPBIT;   break; // 인덱스 0 -> 1 스톱 비트
-		case 1: byStop = ONE5STOPBITS; break; // 인덱스 1 -> 1.5 스톱 비트
-		case 2: byStop = TWOSTOPBITS;  break; // 인덱스 2 -> 2 스톱 비트
-		default: byStop = ONESTOPBIT;
-
+		// 2-1. '설정...' 버튼으로 설정이 완료되었는지 확인
+		if (!m_bConfigSet) {
+			AfxMessageBox(_T("'설정...' 버튼을 눌러 포트 설정을 먼저 완료해주세요."));
+			return;
 		}
-		BYTE byFlow = m_cmb_Flow.GetCurSel();
 
-		
-		if (m_serialPort.Connect(strPort, dwBaud, byParity, byData, byStop, byFlow))
+		// 2-2. 콤보박스에서 포트 이름 가져오기
+		CString strPort;
+		m_cmb_PortName.GetLBText(m_cmb_PortName.GetCurSel(), strPort);
+		if (strPort.IsEmpty()) {
+			AfxMessageBox(_T("포트를 선택하세요."));
+			return;
+		}
+
+		// 2-3. 저장된 설정(m_commConfig.dcb)과 부모 윈도우 포인터(this)로 연결 시도
+		if (m_serialPort.Connect(strPort, m_commConfig.dcb, this))
 		{
 			AfxMessageBox(_T("연결에 성공했습니다."));
+
+			// UI를 연결 후 상태로 변경
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("해제"));
 			m_cmb_PortName.EnableWindow(FALSE);
-			c_cmb_Baud.EnableWindow(FALSE);
-			m_cmb_Data.EnableWindow(FALSE);
-			m_cmb_Parity.EnableWindow(FALSE);
-			m_cmb_Stop.EnableWindow(FALSE);
-			m_cmb_Flow.EnableWindow(FALSE);
+			GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
 		}
 		else
 		{
@@ -272,4 +225,32 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		}
 	}
 
+}
+
+
+void CSerialPortMFCDlg::OnClickedBtnSetting()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	CString strPort;
+	m_cmb_PortName.GetLBText(m_cmb_PortName.GetCurSel(), strPort);
+	if (strPort.IsEmpty()) {
+		AfxMessageBox(_T("먼저 포트를 선택하세요."));
+		return;
+	}
+
+	// 2. 포트의 기본 설정을 가져옵니다. CommConfigDialog를 호출하기 전 필수 과정입니다.
+	DWORD dwSize = sizeof(COMMCONFIG);
+	if (!GetDefaultCommConfig(strPort, &m_commConfig, &dwSize))
+	{
+		AfxMessageBox(_T("포트의 기본 설정을 가져오는 데 실패했습니다."));
+		return;
+	}
+
+	// 3. 윈도우의 표준 포트 설정 대화상자를 호출합니다.
+	if (CommConfigDialog(strPort, this->GetSafeHwnd(), &m_commConfig))
+	{
+		// 사용자가 'OK'를 누르면 m_commConfig 구조체에 새로운 설정이 저장됩니다.
+		m_bConfigSet = TRUE; // 설정이 완료되었음을 표시
+		AfxMessageBox(_T("포트 설정이 완료되었습니다."));
+	}
 }
