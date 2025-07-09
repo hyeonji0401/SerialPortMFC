@@ -23,8 +23,12 @@ private:
 public:
     HANDLE m_hComm; // 시리얼 포트 핸들
     DCB m_dcb;
+
+    BOOL m_bThreadRunning;
+    HWND m_hTargetWnd;
+
     std::vector<std::string> GetAvailablePorts(); // 사용 가능한 시리얼 포트 목록을 반환하는 함수
-    BOOL Connect(CString portName, DCB& dcb); //연결
+    BOOL Connect(CString portName, DCB& dcb,HWND hWnd); //연결
     void Disconnect(); //해제
     BOOL SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits); //설정
     CString strNotice;  

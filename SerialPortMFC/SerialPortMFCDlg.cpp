@@ -212,7 +212,7 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 	}
 
 	//포트 연결
-	if (m_serialPort->Connect(strPort, m_commConfig.dcb))
+	if (m_serialPort->Connect(strPort, m_commConfig.dcb, this->m_hWnd))
 	{
 		AfxMessageBox(_T("연결에 성공했습니다."));
 

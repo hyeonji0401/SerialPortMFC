@@ -1,11 +1,14 @@
 // SerialPort.cpp
 #include "pch.h" // 또는 "stdafx.h"
 #include "SerialPort.h"
+#define WM_USER_RX_DATA (WM_USER + 1)
 
 CSerialPort::CSerialPort()
 {
     // 핸들을 유효하지 않은 값으로 초기화
     m_hComm = INVALID_HANDLE_VALUE;
+    m_bThreadRunning = FALSE;
+    m_hTargetWnd = NULL;
 
 }
 
@@ -60,16 +63,27 @@ std::vector<std::string> CSerialPort::GetAvailablePorts()
 //포트 연결 해제
 void CSerialPort::Disconnect()
 {
+
+
+    if (m_bThreadRunning)
+    {
+        m_bThreadRunning = FALSE;
+        Sleep(100); // 0.1초 대기
+    }
+
     if (m_hComm != INVALID_HANDLE_VALUE)
     {
         CloseHandle(m_hComm); // 포트 핸들 닫기
         m_hComm = INVALID_HANDLE_VALUE;
         
     }
+
+
+   
 }
 
 //포트 연결
-BOOL CSerialPort::Connect(CString portName, DCB& dcb)
+BOOL CSerialPort::Connect(CString portName, DCB& dcb, HWND hWnd)
 {
     // 기존 연결이 있다면 완전히 해제
     Disconnect();
@@ -88,6 +102,9 @@ BOOL CSerialPort::Connect(CString portName, DCB& dcb)
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, //비동기 통신
         NULL //템플릿 파일에 대한 핸들 지정 -> 포트 열 때는 필요없음
     );
+
+    m_hTargetWnd = hWnd;      // 메시지를 받을 윈도우 핸들 저장
+    m_bThreadRunning = TRUE;  // 스레드 동작 깃발 올리기
 
     if (m_hComm == INVALID_HANDLE_VALUE) {
         // 포트 열기 실패
@@ -128,5 +145,6 @@ BOOL CSerialPort::SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE sto
 
 UINT CommThread(LPVOID pParam)
 {
+
     return 0;
 }
