@@ -6,6 +6,7 @@ CSerialPort::CSerialPort()
 {
     // 핸들을 유효하지 않은 값으로 초기화
     m_hComm = INVALID_HANDLE_VALUE;
+
 }
 
 CSerialPort::~CSerialPort()
@@ -14,6 +15,7 @@ CSerialPort::~CSerialPort()
 }
 
 
+//연결 가능한 포트 이름 받아오기
 std::vector<std::string> CSerialPort::GetAvailablePorts()
 {
     std::vector<std::string> portList;
@@ -55,39 +57,36 @@ std::vector<std::string> CSerialPort::GetAvailablePorts()
     return portList;
 }
 
-
-bool CSerialPort::IsConnected()
-{
-    return m_bConnected;
-}
-
+//포트 연결 해제
 void CSerialPort::Disconnect()
 {
-    if (m_bConnected && m_hComm != INVALID_HANDLE_VALUE)
+    if (m_hComm != INVALID_HANDLE_VALUE)
     {
         CloseHandle(m_hComm); // 포트 핸들 닫기
         m_hComm = INVALID_HANDLE_VALUE;
-        m_bConnected = false;
+        
     }
 }
 
-BOOL CSerialPort::Connect(CString portName, DCB& dcb, CWnd* pParent)
+//포트 연결
+BOOL CSerialPort::Connect(CString portName, DCB& dcb)
 {
-    // 1. 기존 연결이 있다면 완전히 해제
+    // 기존 연결이 있다면 완전히 해제
     Disconnect();
 
-    // 2. 포트 이름 포맷팅 및 열기
+    // 포트 이름 포맷팅 및 열기
     CString formattedPortName;
-    formattedPortName.Format(_T("\\\\.\\%s"), portName);
+    formattedPortName.Format(_T("\\\\.\\%s"), portName); // CreateFile 함수가 COM10 이상의 포트도 인식할 수 있도록 포트 이름을 포맷팅
+    strPortName = portName;
 
-    m_hComm = CreateFile(
+    m_hComm = CreateFile( //시리얼 포트 장치를 파일처럼 열어 핸들(m_hDevSerial)을 얻음
         formattedPortName,
-        GENERIC_READ | GENERIC_WRITE,
-        0,
-        NULL,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
+        GENERIC_READ | GENERIC_WRITE, //포트 엑세스 타입 지정
+        0, //No Shared
+        NULL, //포트에 디폴트 안정 속성 할당
+        OPEN_EXISTING, //기존 파일에서 호출
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, //비동기 통신
+        NULL //템플릿 파일에 대한 핸들 지정 -> 포트 열 때는 필요없음
     );
 
     if (m_hComm == INVALID_HANDLE_VALUE) {
@@ -95,27 +94,39 @@ BOOL CSerialPort::Connect(CString portName, DCB& dcb, CWnd* pParent)
         return FALSE;
     }
 
-    // 3. 인자로 받은 DCB로 포트 설정 적용
-    if (!SetCommState(m_hComm, &dcb)) {
-        Disconnect();
-        return FALSE;
-    }
-
-    // 4. 통신 타임아웃 설정
-    COMMTIMEOUTS timeouts;
-    timeouts.ReadIntervalTimeout = MAXDWORD;
-    timeouts.ReadTotalTimeoutMultiplier = 0;
-    timeouts.ReadTotalTimeoutConstant = 0; // 즉시 리턴하도록 설정
-    timeouts.WriteTotalTimeoutMultiplier = 0;
-    timeouts.WriteTotalTimeoutConstant = 0;
-
-    if (!SetCommTimeouts(m_hComm, &timeouts)) {
-        Disconnect();
-        return FALSE;
-    }
-
-  
-
-    m_bConnected = true;
+ 
     return TRUE;
+}
+
+//포트 설정
+BOOL CSerialPort::SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits)
+{
+    //실시간 포트 설정 받아오기
+    if (!GetCommState(m_hComm, &m_dcb))
+    {
+        strNotice.Format("GetCommState() Failed, Close Port(%s), Error#(%xh)", strPortName);
+        MessageBox(strNotice, NULL, MB_OK | MB_ICONERROR);
+        Disconnect();
+        return FALSE;
+    }
+
+    m_dcb.BaudRate = baudrate;
+    m_dcb.ByteSize = byteSize;
+    m_dcb.Parity = parity;
+    m_dcb.StopBits = stopbits;
+
+    //받아온 값으로 포트 설정 맞추기
+    if (!SetCommState(m_hComm, &m_dcb)) {
+        strNotice.Format("GetCommState() Failed, Close Port(%s), Error#(%xh)", strPortName);
+        MessageBox(strNotice, NULL, MB_OK | MB_ICONERROR);
+        Disconnect();
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+UINT CommThread(LPVOID pParam)
+{
+    return 0;
 }

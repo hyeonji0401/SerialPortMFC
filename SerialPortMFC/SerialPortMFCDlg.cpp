@@ -54,9 +54,9 @@ END_MESSAGE_MAP()
 
 CSerialPortMFCDlg::CSerialPortMFCDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_SERIALPORTMFC_DIALOG, pParent)
+	, m_edit_rev(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
-	m_bConfigSet = FALSE;
 }
 
 void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
@@ -64,6 +64,7 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_COMBO_PORTNAME, m_cmb_PortName);
 	DDX_Control(pDX, IDC_BTN_SETTING, m_btn_setting);
+	DDX_Text(pDX, IDC_EDIT_REV, m_edit_rev);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -109,7 +110,7 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 	 // 사용 가능한 포트 목록을 가져옴
 	GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
-	std::vector<std::string> ports = m_serialPort.GetAvailablePorts();
+	std::vector<std::string> ports = m_serialPort->GetAvailablePorts();
 
 	// 포트 콤보박스에 목록을 추가
 	for (const auto& port : ports)
@@ -180,50 +181,59 @@ HCURSOR CSerialPortMFCDlg::OnQueryDragIcon()
 
 void CSerialPortMFCDlg::OnClickedBtnConnect()
 {
-	// 1. 이미 연결된 상태인지 확인 -> 그렇다면 연결 해제 수행
-	if (m_serialPort.IsConnected())
+	// 이미 연결된 상태인지 확인 -> 그렇다면 연결 해제 수행
+	if (m_serialPort)
 	{
-		m_serialPort.Disconnect();
+		m_serialPort->Disconnect();
+		delete m_serialPort;
+		m_serialPort = NULL;
 		AfxMessageBox(_T("연결을 해제했습니다."));
 
 		// UI를 연결 전 상태로 복구
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 		m_cmb_PortName.EnableWindow(TRUE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(TRUE);
+		return;
 	}
-	else
+	
+	//포트 생성
+	m_serialPort = new CSerialPort;
+
+	// 콤보박스에서 포트 이름 가져오기
+	CString strPort;
+	m_cmb_PortName.GetLBText(m_cmb_PortName.GetCurSel(), strPort);
+
+	//포트가 선택되지 않았을 경우
+	if (strPort.IsEmpty()) {
+		AfxMessageBox(_T("포트를 선택하세요."));
+		delete m_serialPort;
+		m_serialPort = NULL;
+		return;
+	}
+
+	//포트 연결
+	if (m_serialPort->Connect(strPort, m_commConfig.dcb))
 	{
-		// 2. 연결되지 않은 상태 -> 연결 시도
+		AfxMessageBox(_T("연결에 성공했습니다."));
 
-		// 2-1. '설정...' 버튼으로 설정이 완료되었는지 확인
-		if (!m_bConfigSet) {
-			AfxMessageBox(_T("'설정...' 버튼을 눌러 포트 설정을 먼저 완료해주세요."));
-			return;
-		}
-
-		// 2-2. 콤보박스에서 포트 이름 가져오기
-		CString strPort;
-		m_cmb_PortName.GetLBText(m_cmb_PortName.GetCurSel(), strPort);
-		if (strPort.IsEmpty()) {
-			AfxMessageBox(_T("포트를 선택하세요."));
-			return;
-		}
-
-		// 2-3. 저장된 설정(m_commConfig.dcb)과 부모 윈도우 포인터(this)로 연결 시도
-		if (m_serialPort.Connect(strPort, m_commConfig.dcb, this))
-		{
-			AfxMessageBox(_T("연결에 성공했습니다."));
-
-			// UI를 연결 후 상태로 변경
-			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("해제"));
-			m_cmb_PortName.EnableWindow(FALSE);
-			GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
-		}
-		else
-		{
-			AfxMessageBox(_T("연결에 실패했습니다."));
-		}
+		// UI를 연결 후 상태로 변경
+		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("해제"));
+		m_cmb_PortName.EnableWindow(FALSE);
+		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
+		
 	}
+	else //연결 실패
+	{
+		AfxMessageBox(_T("연결에 실패했습니다."));
+		delete m_serialPort;
+		m_serialPort = NULL;
+		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
+		return;
+
+	}
+
+	AfxBeginThread(CommThread, m_serialPort); //수신 스레드 시작
+
 
 }
 
@@ -232,25 +242,81 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 {
 	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
 	CString strPort;
+	CString	strNotice;
+	COMMCONFIG comConfig;
+
 	m_cmb_PortName.GetLBText(m_cmb_PortName.GetCurSel(), strPort);
 	if (strPort.IsEmpty()) {
 		AfxMessageBox(_T("먼저 포트를 선택하세요."));
 		return;
 	}
-
-	// 2. 포트의 기본 설정을 가져옵니다. CommConfigDialog를 호출하기 전 필수 과정입니다.
-	DWORD dwSize = sizeof(COMMCONFIG);
-	if (!GetDefaultCommConfig(strPort, &m_commConfig, &dwSize))
+	if (m_serialPort) //포트가 열려있을 때
 	{
-		AfxMessageBox(_T("포트의 기본 설정을 가져오는 데 실패했습니다."));
-		return;
+		if (!GetCommState(m_serialPort->m_hComm, &m_ComDCB)) {
+			strNotice.Format("GetCommState() Failed, Close Port(%s), Error#(%xh)", m_serialPort->strPortName);
+			MessageBox(strNotice, NULL, MB_OK | MB_ICONERROR); //확인, 에러 아이콘
+			m_serialPort->Disconnect();
+			m_serialPort = NULL;
+			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
+			return;
+		}
+
+		memcpy(&comConfig.dcb, &m_ComDCB, sizeof(m_ComDCB));
+
+		// 윈도우의 표준 포트 설정 대화상자를 호출함
+		if (!CommConfigDialog(strPort, m_hWnd, &comConfig))
+		{
+			return;
+		}
+		else {
+			AfxMessageBox(_T("포트 설정이 완료되었습니다."));
+		}
+
+		if (!(m_serialPort->SetupPort(m_ComDCB.BaudRate, m_ComDCB.ByteSize, m_ComDCB.Parity, m_ComDCB.StopBits)))
+		{
+			delete m_serialPort;
+			m_serialPort = NULL;
+			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
+			return;
+		}
+		
+	}
+	else {  //포트가 열려있지 않을 때
+		memcpy(&comConfig.dcb, &m_ComDCB, sizeof(m_ComDCB));
+		if (!CommConfigDialog(strPort, m_hWnd, &comConfig)) {
+			return;
+		}
+		memcpy(&m_ComDCB, &comConfig.dcb, sizeof(m_ComDCB));
 	}
 
-	// 3. 윈도우의 표준 포트 설정 대화상자를 호출합니다.
-	if (CommConfigDialog(strPort, this->GetSafeHwnd(), &m_commConfig))
-	{
-		// 사용자가 'OK'를 누르면 m_commConfig 구조체에 새로운 설정이 저장됩니다.
-		m_bConfigSet = TRUE; // 설정이 완료되었음을 표시
-		AfxMessageBox(_T("포트 설정이 완료되었습니다."));
-	}
+
+	
+}
+
+// 수신한 데이터 UI에 띄워주기
+LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
+//LRESULT : long과 같지만 리턴값을 명시하기 위해 정의된 이름
+//WParam : unsinged int / word parameter => 콜백 함수를 호출할 때 부가적으로 주는 메시지를 가지는 변수
+//LParam : long / Long parameter ''
+
+{
+	// 스레드가 보내준 데이터의 길이(wParam)와 데이터의 실제 위치(lParam)를 받음
+	int length = (int)wParam;  
+	char* data = (char*)lParam;
+	//BYTE = unsigned char 값에는 부호가 없음 
+	//근데 CString으로 바꾸려면 char*로 어차피 바꿔줘야하므로 그냥 char* 사용
+
+	// CString 형식으로 변환 
+	CString receivedString(data, length);
+
+	// 수신 에디트 컨트롤의 기존 텍스트 뒤에 새로 받은 텍스트를 추가
+	m_edit_rev += receivedString;
+	m_edit_rev += _T("\r\n"); // 보기 편하게 줄바꿈 추가 
+
+	UpdateData(FALSE); //값 변수 자동 업데이트 //DoDataExchange() 함수 호출 
+
+	// 스레드에서 new로 할당했던 메모리를 여기서 반드시 해제해야 함!
+	delete[] data;
+
+	return 0;
 }

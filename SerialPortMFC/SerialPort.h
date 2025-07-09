@@ -1,26 +1,34 @@
 // SerialPort.h
 #pragma once
 
-#include <Windows.h> // HANDLE과 같은 Windows API 타입을 사용하기 위해 필요합니다.
-#include <vector>    // 사용 가능한 포트 목록을 저장하기 위해 필요합니다.
-#include <string>    // 포트 이름을 다루기 위해 필요합니다.
+#include <Windows.h> // HANDLE과 같은 Windows API 타입을 사용하기 위해 
+#include <vector>    // 사용 가능한 포트 목록을 저장하기 위해
+#include <string>    // 포트 이름을 다루기 위해 
+#include <afx.h> // cbytearray
 
-class CSerialPort
+
+UINT CommThread(void* pParam);
+
+class CSerialPort : public CWnd //윈도우 메시지 시스템을 직접 사용하기 위해서
 {
 public:
     CSerialPort();  // 생성자
     ~CSerialPort(); // 소멸자
 
+
 private:
-    HANDLE m_hComm; // 시리얼 포트 핸들
-    bool   m_bConnected;
+
     
 
 public:
-    // 사용 가능한 시리얼 포트 목록을 반환하는 함수
-    std::vector<std::string> GetAvailablePorts();
-    BOOL Connect(CString portName, DCB& dcb, CWnd* pParent);
-    void Disconnect();
-    bool IsConnected();
-    BOOL Connect(CString portName, DCB& dcb);
+    HANDLE m_hComm; // 시리얼 포트 핸들
+    DCB m_dcb;
+    std::vector<std::string> GetAvailablePorts(); // 사용 가능한 시리얼 포트 목록을 반환하는 함수
+    BOOL Connect(CString portName, DCB& dcb); //연결
+    void Disconnect(); //해제
+    BOOL SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits); //설정
+    CString strNotice;  
+    CString strPortName; 
+    UINT CommThread(LPVOID pParam);
+    CByteArray m_rxBuffer;
 };
