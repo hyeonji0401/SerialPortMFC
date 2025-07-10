@@ -6,6 +6,9 @@
 #include <string>    // 포트 이름을 다루기 위해 
 #include <afx.h> // cbytearray
 
+#define WM_USER_RX_DATA (WM_USER + 1)
+
+#define MAX_BUFFER_SIZE (1024 * 1024) // 최대 수신 버퍼 크기
 
 UINT CommThread(void* pParam);
 
@@ -27,6 +30,8 @@ public:
     BOOL m_bThreadRunning;
     HWND m_hTargetWnd;
 
+
+
     std::vector<std::string> GetAvailablePorts(); // 사용 가능한 시리얼 포트 목록을 반환하는 함수
     BOOL Connect(CString portName, DCB& dcb,HWND hWnd); //연결
     void Disconnect(); //해제
@@ -34,5 +39,7 @@ public:
     CString strNotice;  
     CString strPortName; 
     UINT CommThread(LPVOID pParam);
-    CByteArray m_rxBuffer;
+    CHAR m_rxBuffer[MAX_BUFFER_SIZE];
+    void ParseReadData(BYTE* in, DWORD len);
+    int nowBufferPosition;
 };

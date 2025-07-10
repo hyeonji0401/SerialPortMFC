@@ -50,4 +50,6 @@ public:
 	CButton m_btn_setting;
 	afx_msg void OnClickedBtnSetting();
 	CString m_edit_rev;
+	CButton m_btn_clear;
+	afx_msg void OnClickedButtonClr();
 };

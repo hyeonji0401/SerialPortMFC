@@ -65,6 +65,7 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_COMBO_PORTNAME, m_cmb_PortName);
 	DDX_Control(pDX, IDC_BTN_SETTING, m_btn_setting);
 	DDX_Text(pDX, IDC_EDIT_REV, m_edit_rev);
+	DDX_Control(pDX, IDC_BUTTON_CLR, m_btn_clear);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -73,6 +74,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BTN_CONNECT, &CSerialPortMFCDlg::OnClickedBtnConnect)
 	ON_BN_CLICKED(IDC_BTN_SETTING, &CSerialPortMFCDlg::OnClickedBtnSetting)
+	ON_BN_CLICKED(IDC_BUTTON_CLR, &CSerialPortMFCDlg::OnClickedButtonClr)
 END_MESSAGE_MAP()
 
 
@@ -193,6 +195,8 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 		m_cmb_PortName.EnableWindow(TRUE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(TRUE);
+		m_edit_rev.Empty();
+		UpdateData(FALSE);
 		return;
 	}
 	
@@ -228,6 +232,8 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		delete m_serialPort;
 		m_serialPort = NULL;
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
+		m_edit_rev.Empty();
+		UpdateData(FALSE);
 		return;
 
 	}
@@ -258,6 +264,8 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			m_serialPort->Disconnect();
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
+			m_edit_rev.Empty();
+			UpdateData(FALSE);
 			return;
 		}
 
@@ -277,6 +285,8 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			delete m_serialPort;
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
+			m_edit_rev.Empty();
+			UpdateData(FALSE);
 			return;
 		}
 		
@@ -319,4 +329,12 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 	delete[] data;
 
 	return 0;
+}
+
+void CSerialPortMFCDlg::OnClickedButtonClr()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	m_edit_rev.Empty();
+	UpdateData(FALSE);
+
 }

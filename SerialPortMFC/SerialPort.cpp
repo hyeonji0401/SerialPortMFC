@@ -1,7 +1,7 @@
 // SerialPort.cpp
 #include "pch.h" // 또는 "stdafx.h"
 #include "SerialPort.h"
-#define WM_USER_RX_DATA (WM_USER + 1)
+
 
 CSerialPort::CSerialPort()
 {
@@ -9,6 +9,11 @@ CSerialPort::CSerialPort()
     m_hComm = INVALID_HANDLE_VALUE;
     m_bThreadRunning = FALSE;
     m_hTargetWnd = NULL;
+
+    //버퍼 초기화
+    int nowBufferPosition = 0;
+    memset(&m_rxBuffer, 0, sizeof(MAX_BUFFER_SIZE));
+
 
 }
 
@@ -134,17 +139,93 @@ BOOL CSerialPort::SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE sto
 
     //받아온 값으로 포트 설정 맞추기
     if (!SetCommState(m_hComm, &m_dcb)) {
-        strNotice.Format("GetCommState() Failed, Close Port(%s), Error#(%xh)", strPortName);
+        strNotice.Format("SetCommState() Failed, Close Port(%s), Error#(%xh)", strPortName);
         MessageBox(strNotice, NULL, MB_OK | MB_ICONERROR);
         Disconnect();
         return FALSE;
     }
 
+    COMMTIMEOUTS timeouts;
+    timeouts.ReadIntervalTimeout = 0;
+    timeouts.ReadTotalTimeoutMultiplier = 0;
+    timeouts.ReadTotalTimeoutConstant = 0;
+    timeouts.WriteTotalTimeoutMultiplier = 0;
+    timeouts.WriteTotalTimeoutConstant = 0;
+    if (!SetCommTimeouts(m_hComm, &timeouts))
+    {
+        strNotice.Format("SetCommTimeouts() Failed, Close Port(%s), Error#(%xh)", strPortName);
+        MessageBox(strNotice, NULL, MB_OK | MB_ICONERROR);
+    }
+        
+
+
+
+
     return TRUE;
 }
 
+
+
 UINT CommThread(LPVOID pParam)
 {
+    CSerialPort* pThread = (CSerialPort*)pParam;
+    BYTE inBuff[1024]; // 한번에 읽어올 최대 버퍼
+    DWORD nBytesRead = 0; //실제로 읽은 바이트 수
+    DWORD dwEventMask, dwError = 0 ; // 이벤트 수신 변수
+    COMSTAT comStat; // 포트 상태 정보 수신 구조체
+
+    dwEventMask = EV_RXCHAR;
+
+    if (!SetCommMask(pThread->m_hComm, EV_RXCHAR)) //RXCHAR 수신 메시지 도착 이벤트 감시 
+    {
+        AfxMessageBox(_T("SetCommMask 설정에 실패했습니다."));
+        return -1; // 스레드 비정상 종료
+    }
+    
+    //이벤트가 들어올 때까지 기다리기
+    while (1)
+    {
+        if (!WaitCommEvent(pThread->m_hComm, &dwEventMask, NULL)) 
+        //EV_RXCHAR 이벤트 들어올 때까지 기다림
+        {
+            continue;
+        }
+        
+        ClearCommError(pThread->m_hComm, &dwError, &comStat);
+        //통신 에러 확인, 들어온 바이트 수 확인 
+        //dwError : 에러 수신 변수
+        //comStat : 상태 정보 수신 변수 -> 들어온 바이트 수 확인 가능
+        DWORD nByteNum = comStat.cbInQue; // 들어온 바이트 수
+
+        if (ReadFile(pThread->m_hComm, &inBuff, nByteNum, &nBytesRead, NULL))
+        {
+            pThread->ParseReadData(inBuff, nByteNum);
+        }
+
+    }
+
 
     return 0;
+}
+
+
+void CSerialPort::ParseReadData(BYTE* in, DWORD len)
+{
+    if (nowBufferPosition + len > MAX_BUFFER_SIZE)
+    {
+        AfxMessageBox(_T("버퍼가 가득 찼습니다"));
+        memset(&m_rxBuffer, 0, sizeof(MAX_BUFFER_SIZE));
+        nowBufferPosition = 0;
+        return; 
+    }
+
+    memcpy(&m_rxBuffer[nowBufferPosition], in, len);
+    nowBufferPosition += len;
+
+    for (int i = nowBufferPosition - len; i < nowBufferPosition; i++)
+    {
+        
+    }
+
+
 }
