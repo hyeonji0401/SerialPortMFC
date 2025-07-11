@@ -57,6 +57,7 @@ CSerialPortMFCDlg::CSerialPortMFCDlg(CWnd* pParent /*=nullptr*/)
 	, m_edit_rev(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	m_serialPort = NULL;
 }
 
 void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
@@ -75,6 +76,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_CONNECT, &CSerialPortMFCDlg::OnClickedBtnConnect)
 	ON_BN_CLICKED(IDC_BTN_SETTING, &CSerialPortMFCDlg::OnClickedBtnSetting)
 	ON_BN_CLICKED(IDC_BUTTON_CLR, &CSerialPortMFCDlg::OnClickedButtonClr)
+	ON_MESSAGE(WM_USER_RX_DATA, &CSerialPortMFCDlg::OnReceiveData)
 END_MESSAGE_MAP()
 
 
@@ -125,7 +127,6 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	{
 		m_cmb_PortName.SetCurSel(0);
 	}
-
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
@@ -237,7 +238,6 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		return;
 
 	}
-
 	AfxBeginThread(CommThread, m_serialPort); //수신 스레드 시작
 
 
@@ -277,6 +277,7 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			return;
 		}
 		else {
+			
 			AfxMessageBox(_T("포트 설정이 완료되었습니다."));
 		}
 
@@ -289,6 +290,7 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			UpdateData(FALSE);
 			return;
 		}
+		
 		
 	}
 	else {  //포트가 열려있지 않을 때
@@ -315,7 +317,7 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 	char* data = (char*)lParam;
 	//BYTE = unsigned char 값에는 부호가 없음 
 	//근데 CString으로 바꾸려면 char*로 어차피 바꿔줘야하므로 그냥 char* 사용
-
+	
 	// CString 형식으로 변환 
 	CString receivedString(data, length);
 

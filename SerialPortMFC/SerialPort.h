@@ -26,11 +26,8 @@ private:
 public:
     HANDLE m_hComm; // 시리얼 포트 핸들
     DCB m_dcb;
-
-    BOOL m_bThreadRunning;
-    HWND m_hTargetWnd;
-
-
+    BOOL m_bThreadRunning; //스레드 동작 여부
+    HWND m_hTargetWnd; //UI 핸들
 
     std::vector<std::string> GetAvailablePorts(); // 사용 가능한 시리얼 포트 목록을 반환하는 함수
     BOOL Connect(CString portName, DCB& dcb,HWND hWnd); //연결
@@ -38,7 +35,6 @@ public:
     BOOL SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits); //설정
     CString strNotice;  
     CString strPortName; 
-    CByteArray m_rxBuffer[MAX_BUFFER_SIZE];
+    CByteArray* m_rxBuffer;
     void ParseReadData(BYTE* in, DWORD len);
-    int nowBufferPosition;
 };
