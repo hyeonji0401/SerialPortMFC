@@ -10,7 +10,7 @@
 
 #define MAX_BUFFER_SIZE (1024 * 1024) // 최대 수신 버퍼 크기
 
-UINT CommThread(void* pParam);
+UINT CommThread(LPVOID pParam);
 
 class CSerialPort : public CWnd //윈도우 메시지 시스템을 직접 사용하기 위해서
 {
@@ -38,8 +38,7 @@ public:
     BOOL SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits); //설정
     CString strNotice;  
     CString strPortName; 
-    UINT CommThread(LPVOID pParam);
-    CHAR m_rxBuffer[MAX_BUFFER_SIZE];
+    CByteArray m_rxBuffer[MAX_BUFFER_SIZE];
     void ParseReadData(BYTE* in, DWORD len);
     int nowBufferPosition;
 };

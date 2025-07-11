@@ -211,20 +211,60 @@ UINT CommThread(LPVOID pParam)
 
 void CSerialPort::ParseReadData(BYTE* in, DWORD len)
 {
-    if (nowBufferPosition + len > MAX_BUFFER_SIZE)
+    int i;
+
+
+    if ((m_rxBuffer->GetSize() + len) > MAX_BUFFER_SIZE) //새로 들어올 데이터로 인해 버퍼가 가득찬 경우
     {
         AfxMessageBox(_T("버퍼가 가득 찼습니다"));
-        memset(&m_rxBuffer, 0, sizeof(MAX_BUFFER_SIZE));
-        nowBufferPosition = 0;
+        m_rxBuffer->RemoveAll();
         return; 
     }
 
-    memcpy(&m_rxBuffer[nowBufferPosition], in, len);
-    nowBufferPosition += len;
+    int nOldSize = m_rxBuffer->GetSize(); // 기존 버퍼 크기 저장
+    m_rxBuffer->SetSize(nOldSize + len);  // 새로운 데이터 길이만큼 버퍼 크기 늘리기
+    memcpy(m_rxBuffer->GetData() + nOldSize, in, len); // 늘어난 공간의 시작 위치에 데이터 복사
 
-    for (int i = nowBufferPosition - len; i < nowBufferPosition; i++)
+    while (TRUE)
     {
-        
+        int nEndOfPacketPosition = -1;
+        for (i = 0; i < m_rxBuffer->GetSize(); i++)
+        {
+            if (m_rxBuffer->GetAt(i) == '\n')
+            {
+                nEndOfPacketPosition = i;
+                break;
+            }
+        }
+
+        if (nEndOfPacketPosition!= (-1)) //CR/LF를 발견한 경우
+        {
+            
+           int nPacketlen = nEndOfPacketPosition;
+            // \n다음 \r이 오는 지 확인
+           if (m_rxBuffer->GetAt(nPacketlen - 1) == '\r' && (nPacketlen > 0))
+           {
+               nPacketlen--;
+           }
+           //실제로 출력할 데이터가 있는지 확인
+           if (nPacketlen > 0)
+           {
+               char* pPacketData = new char[nPacketlen + 1];
+
+               memcpy(pPacketData, m_rxBuffer->GetData(), nPacketlen);
+               pPacketData[nPacketlen] = '\0'; // C-String의 끝을 표시
+
+               // UI 스레드로 메시지 전송 (미리 저장해둔 윈도우 핸들 사용)
+               ::PostMessage(m_hTargetWnd, WM_USER_RX_DATA, 0, (LPARAM)pPacketData);
+           }
+            
+            m_rxBuffer->RemoveAt(0, nEndOfPacketPosition+1); //버퍼 비우기
+
+        } 
+        else
+        {
+            break;
+        }
     }
 
 
