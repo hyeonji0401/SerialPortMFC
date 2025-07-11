@@ -13,7 +13,6 @@
 #define IDC_BTN_CONNECT                 1012
 #define IDC_EDIT_REV                    1015
 #define IDC_STATIC_REV                  1016
-#define IDC_BUTTON1                     1017
 #define IDC_BUTTON_CLR                  1017
 
 // Next default values for new objects
