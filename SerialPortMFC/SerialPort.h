@@ -7,10 +7,12 @@
 #include <afx.h> // cbytearray
 
 #define WM_USER_RX_DATA (WM_USER + 1)
+#define WM_USER_BUFFER_FULL (WM_USER + 2)
 
 #define MAX_BUFFER_SIZE (1024 * 1024) // 최대 수신 버퍼 크기
 
 UINT CommThread(LPVOID pParam);
+
 
 class CSerialPort : public CWnd //윈도우 메시지 시스템을 직접 사용하기 위해서
 {
@@ -28,13 +30,14 @@ public:
     DCB m_dcb;
     BOOL m_bThreadRunning; //스레드 동작 여부
     HWND m_hTargetWnd; //UI 핸들
+    CString strNotice;
+    CString strPortName;
 
     std::vector<std::string> GetAvailablePorts(); // 사용 가능한 시리얼 포트 목록을 반환하는 함수
     BOOL Connect(CString portName, DCB& dcb,HWND hWnd); //연결
     void Disconnect(); //해제
     BOOL SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits); //설정
-    CString strNotice;  
-    CString strPortName; 
+    
     CByteArray* m_rxBuffer;
     void ParseReadData(BYTE* in, DWORD len);
 };

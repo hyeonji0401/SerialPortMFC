@@ -77,6 +77,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_SETTING, &CSerialPortMFCDlg::OnClickedBtnSetting)
 	ON_BN_CLICKED(IDC_BUTTON_CLR, &CSerialPortMFCDlg::OnClickedButtonClr)
 	ON_MESSAGE(WM_USER_RX_DATA, &CSerialPortMFCDlg::OnReceiveData)
+	ON_MESSAGE(WM_USER_BUFFER_FULL, &CSerialPortMFCDlg::OnBufferFull)
 END_MESSAGE_MAP()
 
 
@@ -129,6 +130,11 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	}
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
+
+	ZeroMemory(&m_ComDCB, sizeof(m_ComDCB));
+	m_ComDCB.DCBlength = sizeof(m_ComDCB);
+
+	m_bIsSettingDone = FALSE;
 }
 
 void CSerialPortMFCDlg::OnSysCommand(UINT nID, LPARAM lParam)
@@ -197,12 +203,10 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		m_cmb_PortName.EnableWindow(TRUE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(TRUE);
 		m_edit_rev.Empty();
-		UpdateData(FALSE);
 		return;
 	}
 	
-	//포트 생성
-	m_serialPort = new CSerialPort;
+	
 
 	// 콤보박스에서 포트 이름 가져오기
 	CString strPort;
@@ -211,21 +215,45 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 	//포트가 선택되지 않았을 경우
 	if (strPort.IsEmpty()) {
 		AfxMessageBox(_T("포트를 선택하세요."));
-		delete m_serialPort;
-		m_serialPort = NULL;
 		return;
 	}
+
+	if (m_bIsSettingDone == FALSE)
+	{
+		AfxMessageBox(_T("먼저 '설정' 버튼을 눌러 포트 설정을 완료해주세요."), MB_ICONINFORMATION);
+		return; // 연결 시도 중단
+	}
+
+	//포트 생성
+	m_serialPort = new CSerialPort;
+	
 
 	//포트 연결
 	if (m_serialPort->Connect(strPort, m_commConfig.dcb, this->m_hWnd))
 	{
+		// 연결 성공 직후, 우리가 원하는 통신 설정으로 포트를 구성
+		// m_ComDCB에 저장된 값 (혹은 기본값)을 사용
+		if (!m_serialPort->SetupPort(m_ComDCB.BaudRate, m_ComDCB.ByteSize, m_ComDCB.Parity, m_ComDCB.StopBits))
+		{
+			// 설정에 실패하면 연결을 즉시 끊습니다.
+			AfxMessageBox(_T("포트 설정에 실패했습니다. 연결을 해제합니다."));
+			m_serialPort->Disconnect();
+			delete m_serialPort;
+			m_serialPort = NULL;
+			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
+			m_edit_rev.Empty();
+			return;
+		}
+
 		AfxMessageBox(_T("연결에 성공했습니다."));
 
 		// UI를 연결 후 상태로 변경
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("해제"));
 		m_cmb_PortName.EnableWindow(FALSE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
-		
+
+
+		AfxBeginThread(CommThread, m_serialPort); //수신 스레드 시작
 	}
 	else //연결 실패
 	{
@@ -238,8 +266,7 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		return;
 
 	}
-	AfxBeginThread(CommThread, m_serialPort); //수신 스레드 시작
-
+	
 
 }
 
@@ -252,6 +279,7 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 	COMMCONFIG comConfig;
 
 	m_cmb_PortName.GetLBText(m_cmb_PortName.GetCurSel(), strPort);
+
 	if (strPort.IsEmpty()) {
 		AfxMessageBox(_T("먼저 포트를 선택하세요."));
 		return;
@@ -299,6 +327,7 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			return;
 		}
 		memcpy(&m_ComDCB, &comConfig.dcb, sizeof(m_ComDCB));
+		m_bIsSettingDone = TRUE;
 	}
 
 
@@ -313,21 +342,37 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 
 {
 	// 스레드가 보내준 데이터의 길이(wParam)와 데이터의 실제 위치(lParam)를 받음
-	int length = (int)wParam;  
+	int length = (int)wParam;
 	char* data = (char*)lParam;
 	//BYTE = unsigned char 값에는 부호가 없음 
 	//근데 CString으로 바꾸려면 char*로 어차피 바꿔줘야하므로 그냥 char* 사용
-	
+
 	// CString 형식으로 변환 
 	CString receivedString(data, length);
 
-	// 수신 에디트 컨트롤의 기존 텍스트 뒤에 새로 받은 텍스트를 추가
-	m_edit_rev += receivedString;
-	m_edit_rev += _T("\r\n"); // 보기 편하게 줄바꿈 추가 
+	// 수신 에디트 컨트롤의 포인터를 얻어옴
+	CEdit* pEditRev = (CEdit*)GetDlgItem(IDC_EDIT_REV);
+	if (pEditRev == NULL) {
+		delete[] data;
+		return 0;
+	}
 
-	UpdateData(FALSE); //값 변수 자동 업데이트 //DoDataExchange() 함수 호출 
+	//  에디트 컨트롤의 텍스트가 너무 길어지면 자동으로 비워주기
+	const int MAX_EDIT_LEN = 1024 * 1024;
+	if (pEditRev->GetWindowTextLength() > MAX_EDIT_LEN)
+	{
+		pEditRev->SetWindowText(_T("")); // 텍스트 클리어
+	}
 
-	// 스레드에서 new로 할당했던 메모리를 여기서 반드시 해제해야 함!
+	// 현재 텍스트의 끝 부분으로 커서를 이동
+	int nLen = pEditRev->GetWindowTextLength();
+	pEditRev->SetSel(nLen, nLen);
+
+	// 새로 받은 텍스트를 직접 추가
+	pEditRev->ReplaceSel(receivedString+"\r\n");
+
+
+	// 스레드에서 new로 할당했던 메모리를 여기서 반드시 해제해야 함
 	delete[] data;
 
 	return 0;
@@ -339,4 +384,15 @@ void CSerialPortMFCDlg::OnClickedButtonClr()
 	m_edit_rev.Empty();
 	UpdateData(FALSE);
 
+}
+
+
+LRESULT CSerialPortMFCDlg::OnBufferFull(WPARAM wParam, LPARAM lParam)
+{
+	AfxMessageBox(_T("버퍼가 가득 찼습니다. 연결을 해제합니다."));
+
+	// 연결 해제
+	OnClickedBtnConnect();
+
+	return 0;
 }

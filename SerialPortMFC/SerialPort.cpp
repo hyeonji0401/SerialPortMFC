@@ -13,12 +13,13 @@ CSerialPort::CSerialPort()
     //버퍼 초기화
     m_rxBuffer = new CByteArray();
 
+
 }
 
 CSerialPort::~CSerialPort()
 {
     if (m_rxBuffer) {
-        delete m_rxBuffer;
+        delete(m_rxBuffer);
         m_rxBuffer = NULL;
     }
 }
@@ -74,7 +75,7 @@ void CSerialPort::Disconnect()
     if (m_bThreadRunning)
     {
         m_bThreadRunning = FALSE;
-        Sleep(100); // 0.1초 대기
+        Sleep(1000); // 0.1초 대기
     }
 
     if (m_hComm != INVALID_HANDLE_VALUE)
@@ -84,13 +85,21 @@ void CSerialPort::Disconnect()
         
     }
 
+    if (m_rxBuffer) { 
+        m_rxBuffer->RemoveAll();
+    }
+
+
 }
 
 //포트 연결
 BOOL CSerialPort::Connect(CString portName, DCB& dcb, HWND hWnd)
 {
     // 기존 연결이 있다면 완전히 해제
-    Disconnect();
+    if (m_hComm != INVALID_HANDLE_VALUE)
+    {
+        Disconnect();
+    }
 
     // 포트 이름 포맷팅 및 열기
     CString formattedPortName;
@@ -170,20 +179,17 @@ UINT CommThread(LPVOID pParam)
     COMSTAT comStat; // 포트 상태 정보 수신 구조체
     OVERLAPPED overlap;
 
-
     memset(&overlap, 0, sizeof(overlap));
     overlap.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (overlap.hEvent == NULL)
     {
-        AfxMessageBox(_T("이벤트 생성 실패"));
         return -1;
     }
   
-
+    
     dwEventMask = EV_RXCHAR;
     if (!SetCommMask(pThread->m_hComm, EV_RXCHAR)) //RXCHAR 수신 메시지 도착 이벤트 감시 
     {
-        AfxMessageBox(_T("SetCommMask 설정에 실패했습니다."));
         CloseHandle(overlap.hEvent);
         return -1; // 스레드 비정상 종료
     }
@@ -194,18 +200,18 @@ UINT CommThread(LPVOID pParam)
         //EV_RXCHAR 이벤트 들어올 때까지 기다림
         if (WaitCommEvent(pThread->m_hComm, &dwEventMask, NULL))
         {
-            Sleep(10);
-            printf("waitCommEvent");
             //통신 에러 확인, 들어온 바이트 수 확인 
             //dwError : 에러 수신 변수
             //comStat : 상태 정보 수신 변수 -> 들어온 바이트 수 확인 가능
             if (ClearCommError(pThread->m_hComm, &dwError, &comStat))
             {
-                printf("clearCommError");
                 if (comStat.cbInQue > 0)
                 {
-                    // 비동기 ReadFile 호출
-                    if (!ReadFile(pThread->m_hComm, inBuff, sizeof(inBuff) - 1, &nBytesRead, &overlap))
+                    // 읽어올 바이트 수를 결정 // 버퍼(inBuff) 크기와 실제 쌓인 양 중 작은 값을 선택.
+                    DWORD dwToRead = min((DWORD)sizeof(inBuff), comStat.cbInQue);
+
+                    // 비동기 ReadFile 호출 // 결정된 바이트 수만큼만 읽기를 시도
+                    if (!ReadFile(pThread->m_hComm, inBuff, dwToRead, &nBytesRead, &overlap))
                     {
                         if (GetLastError() == ERROR_IO_PENDING)
                         {
@@ -217,7 +223,6 @@ UINT CommThread(LPVOID pParam)
                             break;
                         }
                     }
-
                     if (nBytesRead > 0)
                     {
                         pThread->ParseReadData(inBuff, nBytesRead);
@@ -241,21 +246,16 @@ UINT CommThread(LPVOID pParam)
 }
 
 
+
 void CSerialPort::ParseReadData(BYTE* in, DWORD len)
 {
     int i;
 
-    printf("ParseReadData");
-    for (int j = 0; j < m_rxBuffer->GetSize(); j++)
-    {
-        printf("%c", m_rxBuffer->GetAt(j));
-    }
 
     if ((m_rxBuffer->GetSize() + len) > MAX_BUFFER_SIZE) //새로 들어올 데이터로 인해 버퍼가 가득찬 경우
     {
-        AfxMessageBox(_T("버퍼가 가득 찼습니다"));
-        m_rxBuffer->RemoveAll();
-        return; 
+        ::PostMessage(m_hTargetWnd, WM_USER_BUFFER_FULL, 0, 0);
+        return;
     }
 
     int nOldSize = m_rxBuffer->GetSize(); // 기존 버퍼 크기 저장
@@ -274,30 +274,30 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
             }
         }
 
-        if (nEndOfPacketPosition!= (-1)) //CR/LF를 발견한 경우
+        if (nEndOfPacketPosition != (-1)) //CR/LF를 발견한 경우
         {
-            
-           int nPacketlen = nEndOfPacketPosition;
+
+            int nPacketlen = nEndOfPacketPosition;
             // \n다음 \r이 오는 지 확인
-           if (m_rxBuffer->GetAt(nPacketlen - 1) == '\r' && (nPacketlen > 0))
-           {
-               nPacketlen--;
-           }
-           //실제로 출력할 데이터가 있는지 확인
-           if (nPacketlen > 0)
-           {
-               char* pPacketData = new char[nPacketlen + 1];
+            if (m_rxBuffer->GetAt(nPacketlen - 1) == '\r' && (nPacketlen > 0))
+            {
+                nPacketlen--;
+            }
+            //실제로 출력할 데이터가 있는지 확인
+            if (nPacketlen > 0)
+            {
+                char* pPacketData = new char[nPacketlen + 1];
 
-               memcpy(pPacketData, m_rxBuffer->GetData(), nPacketlen);
-               pPacketData[nPacketlen] = '\0'; // C-String의 끝을 표시
+                memcpy(pPacketData, m_rxBuffer->GetData(), nPacketlen);
+                pPacketData[nPacketlen] = '\0'; // C-String의 끝을 표시
 
-               // UI 스레드로 메시지 전송 (미리 저장해둔 윈도우 핸들 사용)
-               ::PostMessage(m_hTargetWnd, WM_USER_RX_DATA, (WPARAM)nPacketlen, (LPARAM)pPacketData);
-           }
-            
-            m_rxBuffer->RemoveAt(0, nEndOfPacketPosition+1); //버퍼 비우기
+                // UI 스레드로 메시지 전송 (미리 저장해둔 윈도우 핸들 사용)
+                ::PostMessage(m_hTargetWnd, WM_USER_RX_DATA, (WPARAM)nPacketlen, (LPARAM)pPacketData);
+            }
 
-        } 
+            m_rxBuffer->RemoveAt(0, nEndOfPacketPosition + 1); //버퍼 비우기
+
+        }
         else
         {
             break;

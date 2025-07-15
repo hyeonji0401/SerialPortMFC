@@ -38,6 +38,7 @@ protected:
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
+	afx_msg LRESULT OnBufferFull(WPARAM wParam, LPARAM lParam); 
 	DECLARE_MESSAGE_MAP()
 	afx_msg LRESULT OnReceiveData(WPARAM wParam, LPARAM lParam); //메시지 처리기
 	//afx_msg : MFC 메시지 맵과 연결될 메시지 처리 전용 함수라는 의미
@@ -52,4 +53,5 @@ public:
 	CString m_edit_rev;
 	CButton m_btn_clear;
 	afx_msg void OnClickedButtonClr();
+	BOOL m_bIsSettingDone;
 };
