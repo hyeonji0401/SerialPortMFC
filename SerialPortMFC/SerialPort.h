@@ -36,7 +36,7 @@ public:
     std::vector<std::string> GetAvailablePorts(); // 사용 가능한 시리얼 포트 목록을 반환하는 함수
     BOOL Connect(CString portName, DCB& dcb,HWND hWnd); //연결
     void Disconnect(); //해제
-    BOOL SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits); //설정
+    BOOL SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits, class CEdit& settingInfo); //설정
     
     CByteArray* m_rxBuffer;
     void ParseReadData(BYTE* in, DWORD len);

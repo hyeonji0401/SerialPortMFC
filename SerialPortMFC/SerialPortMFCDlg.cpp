@@ -8,6 +8,13 @@
 #include "SerialPortMFCDlg.h"
 #include "afxdialogex.h"
 #include <winspool.h>   
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <afxstr.h>
 #pragma comment(lib, "winspool.lib")
 
 #ifdef _DEBUG
@@ -67,6 +74,7 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_BTN_SETTING, m_btn_setting);
 	DDX_Text(pDX, IDC_EDIT_REV, m_edit_rev);
 	DDX_Control(pDX, IDC_BUTTON_CLR, m_btn_clear);
+	DDX_Control(pDX, IDC_EDIT_SETTING, m_edit_setting);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -233,7 +241,7 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 	{
 		// 연결 성공 직후, 우리가 원하는 통신 설정으로 포트를 구성
 		// m_ComDCB에 저장된 값 (혹은 기본값)을 사용
-		if (!m_serialPort->SetupPort(m_ComDCB.BaudRate, m_ComDCB.ByteSize, m_ComDCB.Parity, m_ComDCB.StopBits))
+		if (!m_serialPort->SetupPort(m_ComDCB.BaudRate, m_ComDCB.ByteSize, m_ComDCB.Parity, m_ComDCB.StopBits, m_edit_setting))
 		{
 			// 설정에 실패하면 연결을 즉시 끊습니다.
 			AfxMessageBox(_T("포트 설정에 실패했습니다. 연결을 해제합니다."));
@@ -293,6 +301,8 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 			m_edit_rev.Empty();
+			m_edit_setting.SetWindowText(" ");
+			m_edit_setting.Invalidate();
 			UpdateData(FALSE);
 			return;
 		}
@@ -309,12 +319,14 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			AfxMessageBox(_T("포트 설정이 완료되었습니다."));
 		}
 
-		if (!(m_serialPort->SetupPort(m_ComDCB.BaudRate, m_ComDCB.ByteSize, m_ComDCB.Parity, m_ComDCB.StopBits)))
+		if (!(m_serialPort->SetupPort(m_ComDCB.BaudRate, m_ComDCB.ByteSize, m_ComDCB.Parity, m_ComDCB.StopBits, m_edit_setting)))
 		{
 			delete m_serialPort;
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 			m_edit_rev.Empty();
+			m_edit_setting.SetWindowText(" ");
+			m_edit_setting.Invalidate();
 			UpdateData(FALSE);
 			return;
 		}
@@ -333,6 +345,35 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 
 	
 }
+
+void CSerialPortMFCDlg::saveData(const std::string& receivedString)
+{
+	// 현재 시간 정보 얻기
+	auto now = std::chrono::system_clock::now();
+	std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+	std::tm now_tm;
+	localtime_s(&now_tm, &now_c);
+
+	// 파일 이름 형식(YYYY-MM-DD.csv)으로 변환하기 위한 버퍼
+	char filenameBuffer[20];
+	strftime(filenameBuffer, sizeof(filenameBuffer), "%Y-%m-%d.csv", &now_tm);
+
+	std::ofstream outputFile(filenameBuffer, std::ios::app);
+
+	if (outputFile.is_open()) {
+		std::string text = receivedString;
+
+		// 로그에 기록할 시간 형식 (YYYY-MM-DD HH:MM:SS)
+		outputFile << text << "," << std::put_time(&now_tm, "%Y-%m-%d %H:%M:%S") << std::endl;
+
+		outputFile.close();
+		std::cout << filenameBuffer << " 파일에 쓰기 완료" << std::endl;
+	}
+	else {
+		std::cerr << "파일 열기 실패" << std::endl;
+	}
+}
+
 
 // 수신한 데이터 UI에 띄워주기
 LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
@@ -371,12 +412,15 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 	// 새로 받은 텍스트를 직접 추가
 	pEditRev->ReplaceSel(receivedString+"\r\n");
 
+	std::string str = receivedString.GetString();
+	saveData(str);
 
 	// 스레드에서 new로 할당했던 메모리를 여기서 반드시 해제해야 함
 	delete[] data;
 
 	return 0;
 }
+
 
 void CSerialPortMFCDlg::OnClickedButtonClr()
 {
@@ -396,3 +440,5 @@ LRESULT CSerialPortMFCDlg::OnBufferFull(WPARAM wParam, LPARAM lParam)
 
 	return 0;
 }
+
+

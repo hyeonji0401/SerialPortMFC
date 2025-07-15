@@ -129,7 +129,7 @@ BOOL CSerialPort::Connect(CString portName, DCB& dcb, HWND hWnd)
 }
 
 //포트 설정
-BOOL CSerialPort::SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits)
+BOOL CSerialPort::SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE stopbits, class CEdit &settingInfo)
 {
     //실시간 포트 설정 받아오기
     if (!GetCommState(m_hComm, &m_dcb))
@@ -164,6 +164,42 @@ BOOL CSerialPort::SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE sto
         Disconnect();
         return FALSE;
     }
+
+    if (settingInfo)
+    {
+        char	temp[20], strTemp[100];
+        CString	info;
+
+        memset(temp, 0, sizeof(temp));
+        memset(strTemp, 0, sizeof(strTemp));
+
+        sprintf_s(strTemp, "%s-%d Bps-", strPortName, baudrate);
+
+        sprintf_s(temp, "%d-", byteSize);
+        strcat_s(strTemp, temp);
+
+        switch (parity) {
+        case 0: sprintf_s(temp, "No-"); break;
+        case 1: sprintf_s(temp, "Odd-"); break;
+        case 2: sprintf_s(temp, "Even-"); break;
+        case 3: sprintf_s(temp, "Mark-"); break;
+        case 4: sprintf_s(temp, "Space-"); break;
+        }
+        strcat_s(strTemp, temp);
+
+        switch (stopbits) {
+        case 0: sprintf_s(temp, "1\r\n"); break;
+        case 1: sprintf_s(temp, "1.5\r\n"); break;
+        case 2: sprintf_s(temp, "2\r\n"); break;
+        }
+        strcat_s(strTemp, temp);
+
+        info.Format("%s", strTemp);
+
+        settingInfo.SetWindowText(info);
+        settingInfo.Invalidate();
+    }
+
 
     return TRUE;
 }
@@ -216,6 +252,10 @@ UINT CommThread(LPVOID pParam)
                         if (GetLastError() == ERROR_IO_PENDING)
                         {
                             // 비동기 작업이 진행 중이면 완료될 때까지 대기
+                            // 마지막 인수는 입출력이 완료될 때까지 대기할 것인가 아닌가를 지정
+                            //이 인수가 TRUE 이면 비동기 입출력을 중간에 포기하고 입출력이 완료될 때까지 리턴하지 않는다
+                            //입출력 과정만 조사하고 바로 리턴하려면 FALSE여야 하며 이 함수로 완료 시점까지 대기하려면 TRUE를 주면 됨
+                            //[출처] 파일 입출력 - 비동기 입출력 FILE_FLAG_OVERLAPPED, OVERLAPPED, GetOverlappedResult | 작성자 메르카츠
                             GetOverlappedResult(pThread->m_hComm, &overlap, &nBytesRead, TRUE);
                         }
                         else
