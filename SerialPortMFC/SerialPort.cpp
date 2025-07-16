@@ -106,7 +106,7 @@ BOOL CSerialPort::Connect(CString portName, DCB& dcb, HWND hWnd)
     formattedPortName.Format(_T("\\\\.\\%s"), portName); // CreateFile 함수가 COM10 이상의 포트도 인식할 수 있도록 포트 이름을 포맷팅
     strPortName = portName;
 
-    m_hComm = CreateFile( //시리얼 포트 장치를 파일처럼 열어 핸들(m_hDevSerial)을 얻음
+    m_hComm = CreateFile( //시리얼 포트 장치를 파일처럼 열어 핸들을 얻음
         formattedPortName,
         GENERIC_READ | GENERIC_WRITE, //포트 엑세스 타입 지정
         0, //No Shared
@@ -326,7 +326,7 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
             //실제로 출력할 데이터가 있는지 확인
             if (nPacketlen > 0)
             {
-                char* pPacketData = new char[nPacketlen + 1];
+                BYTE* pPacketData = new BYTE[nPacketlen + 1];
 
                 memcpy(pPacketData, m_rxBuffer->GetData(), nPacketlen);
                 pPacketData[nPacketlen] = '\0'; // C-String의 끝을 표시

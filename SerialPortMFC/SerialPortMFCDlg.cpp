@@ -78,6 +78,8 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDIT_SETTING, m_edit_setting);
 	DDX_Control(pDX, IDC_BTN_PATH, m_btn_path);
 	DDX_Text(pDX, IDC_EDIT_PATH, m_edit_path);
+	DDX_Control(pDX, IDC_RADIO_HEX, m_radio_hex);
+	DDX_Control(pDX, IDC_RADIO_ASCII, m_radio_ascii);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -126,6 +128,7 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 	 // 사용 가능한 포트 목록을 가져옴
+	m_radio_ascii.SetCheck(BST_CHECKED);
 
 	m_edit_path = AfxGetApp()->GetProfileString(_T("Settings"), _T("LastSavePath"), _T(""));
 
@@ -161,6 +164,8 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	m_ComDCB.DCBlength = sizeof(m_ComDCB);
 
 	m_bIsSettingDone = FALSE;
+
+	
 
 	
 }
@@ -231,6 +236,9 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		m_cmb_PortName.EnableWindow(TRUE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(TRUE);
 		m_edit_rev.Empty();
+		m_edit_setting.SetWindowText(_T(" "));
+		m_edit_setting.Invalidate();
+		UpdateData(FALSE);
 		return;
 	}
 	
@@ -270,6 +278,9 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 			m_edit_rev.Empty();
+			m_edit_setting.SetWindowText(_T(" "));
+			m_edit_setting.Invalidate();
+			UpdateData(FALSE);
 			return;
 		}
 
@@ -290,6 +301,8 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		m_serialPort = NULL;
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 		m_edit_rev.Empty();
+		m_edit_setting.SetWindowText(_T(" "));
+		m_edit_setting.Invalidate();
 		UpdateData(FALSE);
 		return;
 
@@ -345,7 +358,7 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 			m_edit_rev.Empty();
-			m_edit_setting.SetWindowText(" ");
+			m_edit_setting.SetWindowText(_T(" "));
 			m_edit_setting.Invalidate();
 			UpdateData(FALSE);
 			return;
@@ -432,12 +445,27 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 {
 	// 스레드가 보내준 데이터의 길이(wParam)와 데이터의 실제 위치(lParam)를 받음
 	int length = (int)wParam;
-	char* data = (char*)lParam;
+	BYTE* data = (BYTE*)lParam;
 	//BYTE = unsigned char 값에는 부호가 없음 
 	//근데 CString으로 바꾸려면 char*로 어차피 바꿔줘야하므로 그냥 char* 사용
 
-	// CString 형식으로 변환 
-	CString receivedString(data, length);
+	UpdateData(TRUE);
+
+	CString strToShow;
+
+	if (m_radio_hex.GetCheck() == BST_CHECKED)
+	{
+		for (int i = 0; i < length; i++)
+		{
+			CString temp;
+			temp.Format(_T("%02X "), data[i]);
+			strToShow += temp;
+		}
+	}
+	else if (m_radio_ascii.GetCheck()==BST_CHECKED)
+	{
+		strToShow = CString((char*)data, length);
+	}
 
 	// 수신 에디트 컨트롤의 포인터를 얻어옴
 	CEdit* pEditRev = (CEdit*)GetDlgItem(IDC_EDIT_REV);
@@ -458,9 +486,10 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 	pEditRev->SetSel(nLen, nLen);
 
 	// 새로 받은 텍스트를 직접 추가
-	pEditRev->ReplaceSel(receivedString+"\r\n");
+	pEditRev->ReplaceSel(strToShow+"\r\n");
+	pEditRev->LineScroll(pEditRev->GetLineCount());
 
-	std::string str = receivedString.GetString();
+	std::string str = strToShow.GetString();
 	saveData(str);
 
 	// 스레드에서 new로 할당했던 메모리를 여기서 반드시 해제해야 함

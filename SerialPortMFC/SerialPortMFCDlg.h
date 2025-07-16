@@ -60,4 +60,6 @@ public:
 	CButton m_btn_path;
 	CString m_edit_path;
 	CString getSelectedSaveDirectory;
+	CButton m_radio_hex;
+	CButton m_radio_ascii;
 };
