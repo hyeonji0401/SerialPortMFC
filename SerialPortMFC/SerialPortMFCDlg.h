@@ -56,4 +56,8 @@ public:
 	BOOL m_bIsSettingDone;
 	CEdit m_edit_setting;
 	void saveData(const std::string& receivedString);
+	afx_msg void OnBnClickedBtnPath();
+	CButton m_btn_path;
+	CString m_edit_path;
+	CString getSelectedSaveDirectory;
 };

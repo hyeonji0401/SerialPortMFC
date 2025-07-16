@@ -69,7 +69,7 @@ BOOL CSerialPortMFCApp::InitInstance()
 	// 해당 설정이 저장된 레지스트리 키를 변경하십시오.
 	// TODO: 이 문자열을 회사 또는 조직의 이름과 같은
 	// 적절한 내용으로 수정해야 합니다.
-	SetRegistryKey(_T("로컬 애플리케이션 마법사에서 생성된 애플리케이션"));
+	SetRegistryKey(_T("Hyeonji_SerialPort"));
 
 	CSerialPortMFCDlg dlg;
 	m_pMainWnd = &dlg;

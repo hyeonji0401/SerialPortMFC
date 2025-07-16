@@ -62,6 +62,7 @@ END_MESSAGE_MAP()
 CSerialPortMFCDlg::CSerialPortMFCDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_SERIALPORTMFC_DIALOG, pParent)
 	, m_edit_rev(_T(""))
+	, m_edit_path(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_serialPort = NULL;
@@ -75,6 +76,8 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_EDIT_REV, m_edit_rev);
 	DDX_Control(pDX, IDC_BUTTON_CLR, m_btn_clear);
 	DDX_Control(pDX, IDC_EDIT_SETTING, m_edit_setting);
+	DDX_Control(pDX, IDC_BTN_PATH, m_btn_path);
+	DDX_Text(pDX, IDC_EDIT_PATH, m_edit_path);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -86,6 +89,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_CLR, &CSerialPortMFCDlg::OnClickedButtonClr)
 	ON_MESSAGE(WM_USER_RX_DATA, &CSerialPortMFCDlg::OnReceiveData)
 	ON_MESSAGE(WM_USER_BUFFER_FULL, &CSerialPortMFCDlg::OnBufferFull)
+	ON_BN_CLICKED(IDC_BTN_PATH, &CSerialPortMFCDlg::OnBnClickedBtnPath)
 END_MESSAGE_MAP()
 
 
@@ -122,6 +126,20 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 	 // 사용 가능한 포트 목록을 가져옴
+
+	m_edit_path = AfxGetApp()->GetProfileString(_T("Settings"), _T("LastSavePath"), _T(""));
+
+	// 만약 저장된 경로가 없다면 현재 프로그램 폴더를 기본 경로로 설정
+	if (m_edit_path.IsEmpty())
+	{
+		TCHAR szPath[MAX_PATH];
+		GetModuleFileName(NULL, szPath, MAX_PATH);
+		PathRemoveFileSpec(szPath); // 파일 이름 제외하고 경로만 남김
+		m_edit_path = szPath;
+	}
+	UpdateData(FALSE);
+
+
 	GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 	std::vector<std::string> ports = m_serialPort->GetAvailablePorts();
 
@@ -143,6 +161,8 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	m_ComDCB.DCBlength = sizeof(m_ComDCB);
 
 	m_bIsSettingDone = FALSE;
+
+	
 }
 
 void CSerialPortMFCDlg::OnSysCommand(UINT nID, LPARAM lParam)
@@ -357,8 +377,10 @@ void CSerialPortMFCDlg::saveData(const std::string& receivedString)
 	// 파일 이름 형식(YYYY-MM-DD.csv)으로 변환하기 위한 버퍼
 	char filenameBuffer[20];
 	strftime(filenameBuffer, sizeof(filenameBuffer), "%Y-%m-%d.csv", &now_tm);
+	CString strFullPath;
+	strFullPath.Format(_T("%s\\%s"), m_edit_path, CString(filenameBuffer));
 
-	std::ofstream outputFile(filenameBuffer, std::ios::app);
+	std::ofstream outputFile(strFullPath, std::ios::app);
 
 	if (outputFile.is_open()) {
 		std::string text = receivedString;
@@ -372,6 +394,32 @@ void CSerialPortMFCDlg::saveData(const std::string& receivedString)
 	else {
 		std::cerr << "파일 열기 실패" << std::endl;
 	}
+}
+
+
+void CSerialPortMFCDlg::OnBnClickedBtnPath()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+
+	BROWSEINFO BrInfo;
+	TCHAR szBuffer[512];                                      // 경로저장 버퍼 
+
+	::ZeroMemory(&BrInfo, sizeof(BROWSEINFO));
+	::ZeroMemory(szBuffer, 512);
+
+	BrInfo.hwndOwner = GetSafeHwnd();
+	BrInfo.lpszTitle = _T("파일이 저장될 폴더를 선택하세요");
+	BrInfo.ulFlags = BIF_NEWDIALOGSTYLE | BIF_EDITBOX | BIF_RETURNONLYFSDIRS;
+	LPITEMIDLIST pItemIdList = ::SHBrowseForFolder(&BrInfo);
+	::SHGetPathFromIDList(pItemIdList, szBuffer);				// 파일경로 읽어오기
+
+	CString str;
+	str.Format(_T("%s"), szBuffer);
+	m_edit_path = str+'\\';
+	UpdateData(FALSE);
+
+	AfxGetApp()->WriteProfileString(_T("Settings"), _T("LastSavePath"), m_edit_path); //레지스트리에 파일 경로 저장
+
 }
 
 
@@ -440,5 +488,7 @@ LRESULT CSerialPortMFCDlg::OnBufferFull(WPARAM wParam, LPARAM lParam)
 
 	return 0;
 }
+
+
 
 
