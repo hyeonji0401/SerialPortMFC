@@ -130,6 +130,7 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	 // 사용 가능한 포트 목록을 가져옴
 	m_radio_ascii.SetCheck(BST_CHECKED);
 
+	//저장된 가장 최근 파일 저장 장소 불러옴
 	m_edit_path = AfxGetApp()->GetProfileString(_T("Settings"), _T("LastSavePath"), _T(""));
 
 	// 만약 저장된 경로가 없다면 현재 프로그램 폴더를 기본 경로로 설정
@@ -158,16 +159,14 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 		m_cmb_PortName.SetCurSel(0);
 	}
 
-	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 
 	ZeroMemory(&m_ComDCB, sizeof(m_ComDCB));
 	m_ComDCB.DCBlength = sizeof(m_ComDCB);
 
 	m_bIsSettingDone = FALSE;
 
-	
 
-	
+	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
 
 void CSerialPortMFCDlg::OnSysCommand(UINT nID, LPARAM lParam)
@@ -231,6 +230,11 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		m_serialPort = NULL;
 		AfxMessageBox(_T("연결을 해제했습니다."));
 
+		if (m_file.is_open())
+		{
+			m_file.close();
+		}
+
 		// UI를 연결 전 상태로 복구
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 		m_cmb_PortName.EnableWindow(TRUE);
@@ -284,12 +288,31 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 			return;
 		}
 
+
+		// 오늘 날짜로 파일 경로 생성
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+		std::tm now_tm;
+		localtime_s(&now_tm, &now_c);
+		char filenameBuffer[20];
+		strftime(filenameBuffer, sizeof(filenameBuffer), "%Y-%m-%d.csv", &now_tm);
+		CString strFullPath;
+		UpdateData(TRUE);
+		strFullPath.Format(_T("%s%s"), m_edit_path, CString(filenameBuffer));
+
+		m_file.open(CT2A(strFullPath), std::ios::app);
+		if (!m_file.is_open())
+		{
+			AfxMessageBox(_T("로그 파일을 열 수 없습니다."));
+		}
+
 		AfxMessageBox(_T("연결에 성공했습니다."));
 
 		// UI를 연결 후 상태로 변경
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("해제"));
 		m_cmb_PortName.EnableWindow(FALSE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
+
 
 
 		CWinThread* pThread = AfxBeginThread(CommThread, m_serialPort); //스레드 시작
@@ -383,31 +406,18 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 
 void CSerialPortMFCDlg::saveData(const std::string& receivedString)
 {
-	// 현재 시간 정보 얻기
-	auto now = std::chrono::system_clock::now();
-	std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-	std::tm now_tm;
-	localtime_s(&now_tm, &now_c);
-
-	// 파일 이름 형식(YYYY-MM-DD.csv)으로 변환하기 위한 버퍼
-	char filenameBuffer[20];
-	strftime(filenameBuffer, sizeof(filenameBuffer), "%Y-%m-%d.csv", &now_tm);
-	CString strFullPath;
-	strFullPath.Format(_T("%s\\%s"), m_edit_path, CString(filenameBuffer));
-
-	std::ofstream outputFile(strFullPath, std::ios::app);
-
-	if (outputFile.is_open()) {
+	if (m_file.is_open())
+	{
 		std::string text = receivedString;
 
-		// 로그에 기록할 시간 형식 (YYYY-MM-DD HH:MM:SS)
-		outputFile << text << "," << std::put_time(&now_tm, "%Y-%m-%d %H:%M:%S") << std::endl;
+		// 현재 시간 정보 얻기
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+		std::tm now_tm;
+		localtime_s(&now_tm, &now_c);
 
-		outputFile.close();
-		std::cout << filenameBuffer << " 파일에 쓰기 완료" << std::endl;
-	}
-	else {
-		std::cerr << "파일 열기 실패" << std::endl;
+		// 로그에 기록
+		m_file << text << "," << std::put_time(&now_tm, "%Y-%m-%d %H:%M:%S") << std::endl;
 	}
 }
 
@@ -422,9 +432,9 @@ void CSerialPortMFCDlg::OnBnClickedBtnPath()
 	::ZeroMemory(&BrInfo, sizeof(BROWSEINFO));
 	::ZeroMemory(szBuffer, 512);
 
-	BrInfo.hwndOwner = GetSafeHwnd();
+	BrInfo.hwndOwner = GetSafeHwnd(); 
 	BrInfo.lpszTitle = _T("파일이 저장될 폴더를 선택하세요");
-	BrInfo.ulFlags = BIF_NEWDIALOGSTYLE | BIF_EDITBOX | BIF_RETURNONLYFSDIRS;
+	BrInfo.ulFlags = BIF_NEWDIALOGSTYLE | BIF_EDITBOX | BIF_RETURNONLYFSDIRS; 
 	LPITEMIDLIST pItemIdList = ::SHBrowseForFolder(&BrInfo);
 	::SHGetPathFromIDList(pItemIdList, szBuffer);				// 파일경로 읽어오기
 
@@ -443,7 +453,6 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 //LRESULT : long과 같지만 리턴값을 명시하기 위해 정의된 이름
 //WParam : unsinged int / word parameter => 콜백 함수를 호출할 때 부가적으로 주는 메시지를 가지는 변수
 //LParam : long / Long parameter ''
-
 {
 	// 스레드가 보내준 데이터의 길이(wParam)와 데이터의 실제 위치(lParam)를 받음
 	int length = (int)wParam;
@@ -455,7 +464,7 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 
 	CString strToShow;
 
-	if (m_radio_hex.GetCheck() == BST_CHECKED)
+	if (m_radio_hex.GetCheck() == BST_CHECKED) //HEX를 선택했을 경우
 	{
 		for (int i = 0; i < length; i++)
 		{
@@ -464,7 +473,7 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 			strToShow += temp;
 		}
 	}
-	else if (m_radio_ascii.GetCheck()==BST_CHECKED)
+	else if (m_radio_ascii.GetCheck()==BST_CHECKED) //ASCII를 선택했을 경우
 	{
 		strToShow = CString((char*)data, length);
 	}

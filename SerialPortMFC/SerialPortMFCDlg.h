@@ -4,6 +4,7 @@
 
 #pragma once
 #include "SerialPort.h" 
+#include <fstream>
 #define WM_USER_RX_DATA (WM_USER + 1) //사용자 메시지 영역 
 
 // CSerialPortMFCDlg 대화 상자
@@ -62,4 +63,5 @@ public:
 	CString getSelectedSaveDirectory;
 	CButton m_radio_hex;
 	CButton m_radio_ascii;
+	std::ofstream m_file;
 };

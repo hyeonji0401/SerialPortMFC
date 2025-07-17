@@ -224,10 +224,14 @@ UINT CommThread(LPVOID pParam)
     DWORD nBytesRead = 0; //실제로 읽은 바이트 수
     DWORD dwEventMask, dwError = 0 ; // 이벤트 수신 변수
     COMSTAT comStat; // 포트 상태 정보 수신 구조체
-    OVERLAPPED overlap;
+    OVERLAPPED overlap; // 비동기 입력 및 출력에 사용되는 정보
 
     memset(&overlap, 0, sizeof(overlap));
-    overlap.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    overlap.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // 작업이 완료될때 시스테멩서 신호를 받는 상태로 설정되는 이벤트에 대한 핸들
+                                // 1. 생성 핸들을 자식 프로세스가 상속받을 것인가
+                                // 2.  이벤트를 자동으로 리셋할 것인가
+                                // 3. 초기값을 시그널로 할 것인가 
+                               // 4. 이벤트 개체 이름 없음
     if (overlap.hEvent == NULL)
     {
         return -1;
@@ -244,13 +248,26 @@ UINT CommThread(LPVOID pParam)
     //이벤트가 들어올 때까지 기다리기
     while (pThread->m_bThreadRunning)
     {
-        //EV_RXCHAR 이벤트 들어올 때까지 기다림
-        if (WaitCommEvent(pThread->m_hComm, &dwEventMask, NULL))
+
+        //EV_RXCHAR 이벤트 대기 요청
+        if (!WaitCommEvent(pThread->m_hComm, &dwEventMask, &overlap))
         {
+            if (GetLastError() != ERROR_IO_PENDING)
+            {
+                break;
+            }
+        }
+
+        //이벤트 발생 시까지 대기
+        if (WaitForSingleObject(overlap.hEvent, INFINITE) == WAIT_OBJECT_0)
+        {
+            // 이벤트 처리 리셋
+            ResetEvent(overlap.hEvent);
+
             //통신 에러 확인, 들어온 바이트 수 확인 
             //dwError : 에러 수신 변수
             //comStat : 상태 정보 수신 변수 -> 들어온 바이트 수 확인 가능
-            if (ClearCommError(pThread->m_hComm, &dwError, &comStat))
+            if (pThread->m_bThreadRunning && ClearCommError(pThread->m_hComm, &dwError, &comStat))
             {
                 if (comStat.cbInQue > 0)
                 {
@@ -282,16 +299,10 @@ UINT CommThread(LPVOID pParam)
 
             }
         }
-        else
-        {
-            if (GetLastError() == ERROR_INVALID_HANDLE) {
-                pThread->m_bThreadRunning = FALSE;
-            }
-        }
-        
-
 
     }
+        
+       
     CloseHandle(overlap.hEvent);
     return 0;
 }
