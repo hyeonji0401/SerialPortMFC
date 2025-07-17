@@ -292,7 +292,9 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
 
 
-		AfxBeginThread(CommThread, m_serialPort); //수신 스레드 시작
+		CWinThread* pThread = AfxBeginThread(CommThread, m_serialPort); //스레드 시작
+		m_serialPort->m_hThread = pThread->m_hThread; //핸들 저장
+
 	}
 	else //연결 실패
 	{

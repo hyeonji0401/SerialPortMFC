@@ -75,7 +75,12 @@ void CSerialPort::Disconnect()
     if (m_bThreadRunning)
     {
         m_bThreadRunning = FALSE;
-        Sleep(1000); // 0.1초 대기
+        if (m_hThread != NULL) { //스레드가 끝날 때까지 대기
+            WaitForSingleObject(m_hThread, 2000);
+            CloseHandle(m_hThread);
+            m_hThread = NULL;
+        }
+ 
     }
 
     if (m_hComm != INVALID_HANDLE_VALUE)
@@ -163,6 +168,12 @@ BOOL CSerialPort::SetupPort(DWORD baudrate, BYTE byteSize, BYTE parity, BYTE sto
         MessageBox(strNotice, NULL, MB_OK | MB_ICONERROR);
         Disconnect();
         return FALSE;
+    }
+
+    //포트 버퍼 초기화
+    if (!PurgeComm(m_hComm, PURGE_RXCLEAR | PURGE_TXCLEAR))
+    {
+        MessageBox(_T("포트 버퍼를 비우는 데 실패했습니다."), NULL, MB_OK | MB_ICONERROR);
     }
 
     if (settingInfo)
