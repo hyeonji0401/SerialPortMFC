@@ -249,7 +249,7 @@ UINT CommThread(LPVOID pParam)
     while (pThread->m_bThreadRunning)
     {
 
-        //EV_RXCHAR 이벤트 대기 요청
+        //EV_RXCHAR 이벤트 발생 감지 요청
         if (!WaitCommEvent(pThread->m_hComm, &dwEventMask, &overlap))
         {
             if (GetLastError() != ERROR_IO_PENDING)
@@ -259,10 +259,11 @@ UINT CommThread(LPVOID pParam)
         }
 
         //이벤트 발생 시까지 대기
-        if (WaitForSingleObject(overlap.hEvent, INFINITE) == WAIT_OBJECT_0)
+        if (WaitForSingleObject(overlap.hEvent, INFINITE) == WAIT_OBJECT_0) // 지정된 개체가 신호 상태가 되거나 시간 제한 간격이 경과할때까 기다림
+                                                //무한 대기   //기다리던 evnet가 신호상태가 됨       
         {
             // 이벤트 처리 리셋
-            ResetEvent(overlap.hEvent);
+            ResetEvent(overlap.hEvent); //이벤트 수신 완료했으니 다음 이벤트를 위해 OFF
 
             //통신 에러 확인, 들어온 바이트 수 확인 
             //dwError : 에러 수신 변수
@@ -275,16 +276,17 @@ UINT CommThread(LPVOID pParam)
                     DWORD dwToRead = min((DWORD)sizeof(inBuff), comStat.cbInQue);
 
                     // 비동기 ReadFile 호출 // 결정된 바이트 수만큼만 읽기를 시도
-                    if (!ReadFile(pThread->m_hComm, inBuff, dwToRead, &nBytesRead, &overlap))
+                    if (!ReadFile(pThread->m_hComm, inBuff, dwToRead, &nBytesRead, &overlap)) 
+                        // 데이터 읽어오기 실패 OR 비동기 입출력 완료 시 0을 반환
                     {
-                        if (GetLastError() == ERROR_IO_PENDING)
+                        if (GetLastError() == ERROR_IO_PENDING)  //ERROR_IO_PENDING을 가지고 있다면 실패가 아니라 비동기 입출력 완료를 의미함
                         {
                             // 비동기 작업이 진행 중이면 완료될 때까지 대기
                             // 마지막 인수는 입출력이 완료될 때까지 대기할 것인가 아닌가를 지정
                             //이 인수가 TRUE 이면 비동기 입출력을 중간에 포기하고 입출력이 완료될 때까지 리턴하지 않는다
                             //입출력 과정만 조사하고 바로 리턴하려면 FALSE여야 하며 이 함수로 완료 시점까지 대기하려면 TRUE를 주면 됨
                             //[출처] 파일 입출력 - 비동기 입출력 FILE_FLAG_OVERLAPPED, OVERLAPPED, GetOverlappedResult | 작성자 메르카츠
-                            GetOverlappedResult(pThread->m_hComm, &overlap, &nBytesRead, TRUE);
+                            GetOverlappedResult(pThread->m_hComm, &overlap, &nBytesRead, TRUE); //실제 결과 받아오기
                         }
                         else
                         {
@@ -302,7 +304,6 @@ UINT CommThread(LPVOID pParam)
 
     }
         
-       
     CloseHandle(overlap.hEvent);
     return 0;
 }
@@ -331,7 +332,7 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
         {
             if (m_rxBuffer->GetAt(i) == '\n')
             {
-                nEndOfPacketPosition = i;
+                nEndOfPacketPosition = i; //패킷 끝 위치 저장
                 break;
             }
         }
@@ -350,7 +351,7 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
             {
                 BYTE* pPacketData = new BYTE[nPacketlen + 1];
 
-                memcpy(pPacketData, m_rxBuffer->GetData(), nPacketlen);
+                memcpy(pPacketData, m_rxBuffer->GetData(), nPacketlen); 
                 pPacketData[nPacketlen] = '\0'; // C-String의 끝을 표시
 
                 // UI 스레드로 메시지 전송 (미리 저장해둔 윈도우 핸들 사용)
