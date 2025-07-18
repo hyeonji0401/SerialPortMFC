@@ -534,7 +534,7 @@ LRESULT CSerialPortMFCDlg::OnBufferFull(WPARAM wParam, LPARAM lParam)
 
 
 
-
+// Extended SLIP 파서, 디코딩 적용 여부
 
 void CSerialPortMFCDlg::OnClickedCheckSlip()
 {
