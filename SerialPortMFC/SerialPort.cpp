@@ -490,6 +490,8 @@ void CSerialPort::ParseReadDataCRC(BYTE* in, DWORD len)
 
                 //  체크섬 계산 (디코딩된 데이터 기준)
                 BYTE calculatedChecksum = 0;
+                //BYTE의 크기 : BYTE라는 데이터 타입은 정확히 1바이트(8비트) 크기
+                //255를 넘을 경우(오버플로) 자동으로 0부터 시작하게 됨 -> 256을 나눌 필요없음
                 for (int i = 0; i < nDataLength; i++)
                 {
                     calculatedChecksum += pData[i]; //데이터 합산
