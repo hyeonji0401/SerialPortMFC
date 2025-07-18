@@ -13,6 +13,8 @@ CSerialPort::CSerialPort()
     //버퍼 초기화
     m_rxBuffer = new CByteArray();
 
+    isCRC = FALSE;
+
 
 }
 
@@ -70,8 +72,6 @@ std::vector<std::string> CSerialPort::GetAvailablePorts()
 //포트 연결 해제
 void CSerialPort::Disconnect()
 {
-
-
     if (m_bThreadRunning)
     {
         m_bThreadRunning = FALSE;
@@ -229,14 +229,13 @@ UINT CommThread(LPVOID pParam)
     memset(&overlap, 0, sizeof(overlap));
     overlap.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // 작업이 완료될때 시스테멩서 신호를 받는 상태로 설정되는 이벤트에 대한 핸들
                                 // 1. 생성 핸들을 자식 프로세스가 상속받을 것인가
-                                // 2.  이벤트를 자동으로 리셋할 것인가
+                                // 2. 이벤트를 자동으로 리셋할 것인가
                                 // 3. 초기값을 시그널로 할 것인가 
                                // 4. 이벤트 개체 이름 없음
     if (overlap.hEvent == NULL)
     {
         return -1;
     }
-  
     
     dwEventMask = EV_RXCHAR;
     if (!SetCommMask(pThread->m_hComm, EV_RXCHAR)) //RXCHAR 수신 메시지 도착 이벤트 감시 
@@ -308,11 +307,54 @@ UINT CommThread(LPVOID pParam)
     return 0;
 }
 
+void CSerialPort::ClearRxBuffer()
+{
+    if (m_rxBuffer) // 포인터가 유효한지 확인
+    {
+        m_rxBuffer->RemoveAll(); // 버퍼의 모든 내용을 삭제
+    }
+}
+
+/*
+void CSerialPort::ParseReadData(BYTE* in, DWORD len)
+{
+    if (isCRC)
+    {
+        ParseReadDataCRC(in, len); // SLIP 모드면 SLIP 파서 호출
+    }
+    else
+    {
+        ParseReadDataLF(in, len); // 아니면 일반 파서 호출
+    }
+}*/
 
 
 void CSerialPort::ParseReadData(BYTE* in, DWORD len)
 {
-    int i;
+    // 1. SLIP 모드가 켜져 있다면, 전문 파서에게 일을 넘깁니다.
+    if (isCRC)
+    {
+        ParseReadDataCRC(in, len);
+        return; // SLIP 파서가 일을 마쳤으므로 여기서 종료
+    }
+
+    // 2. SLIP 모드가 아니라면 (단순 표시 모드),
+    //    아무것도 해석하지 않고 받은 데이터를 그대로 UI 스레드로 보냅니다.
+    if (len > 0)
+    {
+        // UI 스레드에서 delete[] 할 수 있도록 메모리를 새로 할당하여 데이터를 복사
+        char* pPacketData = new char[len];
+        memcpy(pPacketData, in, len);
+
+        // UI 스레드로 데이터 덩어리를 그대로 전송
+        ::PostMessage(m_hTargetWnd, WM_USER_RX_DATA, (WPARAM)len, (LPARAM)pPacketData);
+    }
+}
+
+// 끝이 CR/LF만 오는 경우
+void CSerialPort::ParseReadDataLF(BYTE* in, DWORD len)
+{
+    int i=0;
 
 
     if ((m_rxBuffer->GetSize() + len) > MAX_BUFFER_SIZE) //새로 들어올 데이터로 인해 버퍼가 가득찬 경우
@@ -368,4 +410,108 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
     }
 
 
+}
+
+void CSerialPort::ParseReadDataCRC(BYTE* in, DWORD len)
+{
+    int i=0;
+
+    if ((m_rxBuffer->GetSize() + len) > MAX_BUFFER_SIZE) //새로 들어올 데이터로 인해 버퍼가 가득찬 경우
+    {
+        ::PostMessage(m_hTargetWnd, WM_USER_BUFFER_FULL, 0, 0);
+        return;
+    }
+
+    int nOldSize = m_rxBuffer->GetSize();
+    m_rxBuffer->SetSize(nOldSize + len);
+    memcpy(m_rxBuffer->GetData() + nOldSize, in, len);
+
+    int nScanStartPosition = 0;
+
+    while (TRUE)
+    {
+        // 패킷의 시작(0xC0)을 찾음
+        int nStartOfPacket = -1;
+        for (i = nScanStartPosition; i < m_rxBuffer->GetSize(); i++) {
+            if (m_rxBuffer->GetAt(i) == 0xC0) {
+                nStartOfPacket = i;
+                break;
+            }
+        }
+        if (nStartOfPacket == -1) break;
+
+        // 패킷의 끝(다음 0xC0)을 찾음
+        int nEndOfPacket = -1;
+        for (i = nStartOfPacket + 1; i < m_rxBuffer->GetSize(); i++) {
+            if (m_rxBuffer->GetAt(i) == 0xC0) {
+                nEndOfPacket = i;
+                break;
+            }
+        }
+        if (nEndOfPacket == -1) break;
+
+        // SLIP 디코딩 
+        CByteArray decodedPacket; // 디코딩된 데이터를 담을 임시 버퍼
+        for (i = nStartOfPacket + 1; i < nEndOfPacket; i++)
+        {
+            if (m_rxBuffer->GetAt(i) == 0xDB) // ESC 문자를 만나면
+            {
+                i++; // 다음 바이트를 확인
+                if (i < nEndOfPacket)
+                {
+                    if (m_rxBuffer->GetAt(i) == 0xDC) {
+                        decodedPacket.Add(0xC0); // DB DC -> C0
+                    }
+                    else if (m_rxBuffer->GetAt(i) == 0xDD) {
+                        decodedPacket.Add(0xDB); // DB DD -> DB
+                    }
+                }
+            }
+            else // 일반 데이터는 그대로 복사
+            {
+                decodedPacket.Add(m_rxBuffer->GetAt(i));
+            }
+        }
+
+
+
+        // 체크섬 계산 및 데이터 추출
+        if (decodedPacket.GetSize() >= 2) // 최소 길이: Length(1) + Checksum(1)
+        {
+            BYTE nDataLength = decodedPacket.GetAt(0);
+
+            // 실제 데이터 길이와 패킷에 기록된 길이가 맞는지 확인
+            if (decodedPacket.GetSize() == (nDataLength + 2)) //실제 데이터 길이 + Length(1) + Checksum(1)
+            {
+                BYTE* pData = decodedPacket.GetData() + 1; //데이터 포인터
+                BYTE nChecksum = decodedPacket.GetAt(1 + nDataLength); //가장 마지막 글자
+
+                //  체크섬 계산 (디코딩된 데이터 기준)
+                BYTE calculatedChecksum = 0;
+                for (int i = 0; i < nDataLength; i++)
+                {
+                    calculatedChecksum += pData[i]; //데이터 합산
+                }
+
+                // 체크섬 검증
+                if (calculatedChecksum == nChecksum)
+                {
+                    // 순수 데이터만 UI 스레드로 전송
+                    char* pPacketData = new char[nDataLength + 1];
+                    memcpy(pPacketData, pData, nDataLength);
+                    pPacketData[nDataLength] = '\0';
+                    ::PostMessage(m_hTargetWnd, WM_USER_RX_DATA, (WPARAM)nDataLength, (LPARAM)pPacketData);
+                }
+            }
+        }
+
+        // 처리가 끝난 패킷만큼 스캔 위치 이동
+        nScanStartPosition = nEndOfPacket + 1;
+    }
+
+    // 처리된 모든 데이터를 버퍼 앞에서 한 번에 제거
+    if (nScanStartPosition > 0)
+    {
+        m_rxBuffer->RemoveAt(0, nScanStartPosition);
+    }
 }

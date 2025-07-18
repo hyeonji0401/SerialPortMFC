@@ -64,4 +64,6 @@ public:
 	CButton m_radio_hex;
 	CButton m_radio_ascii;
 	std::ofstream m_file;
+	CButton m_check_SLIP;
+	afx_msg void OnClickedCheckSlip();
 };

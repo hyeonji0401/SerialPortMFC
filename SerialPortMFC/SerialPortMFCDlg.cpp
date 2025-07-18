@@ -80,6 +80,7 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_EDIT_PATH, m_edit_path);
 	DDX_Control(pDX, IDC_RADIO_HEX, m_radio_hex);
 	DDX_Control(pDX, IDC_RADIO_ASCII, m_radio_ascii);
+	DDX_Control(pDX, IDC_CHECK_SLIP, m_check_SLIP);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -92,6 +93,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_MESSAGE(WM_USER_RX_DATA, &CSerialPortMFCDlg::OnReceiveData)
 	ON_MESSAGE(WM_USER_BUFFER_FULL, &CSerialPortMFCDlg::OnBufferFull)
 	ON_BN_CLICKED(IDC_BTN_PATH, &CSerialPortMFCDlg::OnBnClickedBtnPath)
+	ON_BN_CLICKED(IDC_CHECK_SLIP, &CSerialPortMFCDlg::OnClickedCheckSlip)
 END_MESSAGE_MAP()
 
 
@@ -129,6 +131,8 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 	 // 사용 가능한 포트 목록을 가져옴
 	m_radio_ascii.SetCheck(BST_CHECKED);
+
+	m_check_SLIP.SetCheck(0);
 
 	//저장된 가장 최근 파일 저장 장소 불러옴
 	m_edit_path = AfxGetApp()->GetProfileString(_T("Settings"), _T("LastSavePath"), _T(""));
@@ -313,7 +317,8 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		m_cmb_PortName.EnableWindow(FALSE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
 
-
+		UpdateData(TRUE);
+		m_serialPort->isCRC= m_check_SLIP.GetCheck();
 
 		CWinThread* pThread = AfxBeginThread(CommThread, m_serialPort); //스레드 시작
 		m_serialPort->m_hThread = pThread->m_hThread; //핸들 저장
@@ -352,7 +357,7 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 	}
 	if (m_serialPort) //포트가 열려있을 때
 	{
-		if (!GetCommState(m_serialPort->m_hComm, &m_ComDCB)) {
+		if (!GetCommState(m_serialPort->m_hComm, &m_ComDCB)) { //현재 컨트롤 설정을 m_ComDCB로 받아옴
 			strNotice.Format("GetCommState() Failed, Close Port(%s), Error#(%xh)", m_serialPort->strPortName);
 			MessageBox(strNotice, NULL, MB_OK | MB_ICONERROR); //확인, 에러 아이콘
 			m_serialPort->Disconnect();
@@ -389,7 +394,6 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			return;
 		}
 		
-		
 	}
 	else {  //포트가 열려있지 않을 때
 		memcpy(&comConfig.dcb, &m_ComDCB, sizeof(m_ComDCB));
@@ -399,8 +403,6 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 		memcpy(&m_ComDCB, &comConfig.dcb, sizeof(m_ComDCB));
 		m_bIsSettingDone = TRUE;
 	}
-
-
 	
 }
 
@@ -427,7 +429,8 @@ void CSerialPortMFCDlg::OnBnClickedBtnPath()
 	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
 
 	BROWSEINFO BrInfo;
-	TCHAR szBuffer[512];                                      // 경로저장 버퍼 
+	TCHAR szBuffer[512];  // 경로저장 버퍼  // TCHAR : 멀티바이트 문자 집합(가변 너비 인코딩) -> unsigned char : 1byte
+	                                       //         유니코드(모든 문자를 2byte로 표현) -> wchar_t : 2byte 
 
 	::ZeroMemory(&BrInfo, sizeof(BROWSEINFO));
 	::ZeroMemory(szBuffer, 512);
@@ -439,7 +442,7 @@ void CSerialPortMFCDlg::OnBnClickedBtnPath()
 	::SHGetPathFromIDList(pItemIdList, szBuffer);				// 파일경로 읽어오기
 
 	CString str;
-	str.Format(_T("%s"), szBuffer);
+	str.Format(_T("%s"), szBuffer); //모든 사용자가 유니코드를 사용한다는 보장이 없기 때문에 문자 상수 사용해야함
 	m_edit_path = str+'\\';
 	UpdateData(FALSE);
 
@@ -494,11 +497,11 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 
 	// 현재 텍스트의 끝 부분으로 커서를 이동
 	int nLen = pEditRev->GetWindowTextLength();
-	pEditRev->SetSel(nLen, nLen);
+	pEditRev->SetSel(nLen, nLen); //시작, 끝
 
 	// 새로 받은 텍스트를 직접 추가
 	pEditRev->ReplaceSel(strToShow+"\r\n");
-	pEditRev->LineScroll(pEditRev->GetLineCount());
+	pEditRev->LineScroll(pEditRev->GetLineCount()); //가장 끝으로 커서 옮김
 
 	std::string str = strToShow.GetString();
 	saveData(str);
@@ -532,3 +535,16 @@ LRESULT CSerialPortMFCDlg::OnBufferFull(WPARAM wParam, LPARAM lParam)
 
 
 
+
+void CSerialPortMFCDlg::OnClickedCheckSlip()
+{
+	UpdateData(TRUE);
+
+	BOOL isCheckCRC = m_check_SLIP.GetCheck();
+
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	if(m_serialPort)
+	{
+		m_serialPort->isCRC = isCheckCRC;
+	}
+}

@@ -41,4 +41,8 @@ public:
     
     CByteArray* m_rxBuffer;
     void ParseReadData(BYTE* in, DWORD len);
+    void ParseReadDataLF(BYTE* in, DWORD len);
+    void ParseReadDataCRC(BYTE* in, DWORD len);
+    BOOL isCRC;
+    void ClearRxBuffer();
 };
