@@ -13,7 +13,7 @@ CSerialPort::CSerialPort()
     //버퍼 초기화
     m_rxBuffer = new CByteArray();
 
-    isCRC = FALSE;
+    isSLIP = FALSE;
 
 
 }
@@ -332,9 +332,9 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
 void CSerialPort::ParseReadData(BYTE* in, DWORD len)
 {
     //  SLIP 모드가 켜져 있는지 확인
-    if (isCRC)
+    if (isSLIP)
     {
-        ParseReadDataCRC(in, len);
+        ParseReadDataChecksum(in, len);
         return; // SLIP 파서가 일을 마쳤으므로 여기서 종료
     }
 
@@ -414,7 +414,7 @@ void CSerialPort::ParseReadDataLF(BYTE* in, DWORD len)
 
 }*/
 
-void CSerialPort::ParseReadDataCRC(BYTE* in, DWORD len)
+void CSerialPort::ParseReadDataChecksum(BYTE* in, DWORD len)
 {
     int i=0;
 

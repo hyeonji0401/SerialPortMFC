@@ -318,7 +318,7 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
 
 		UpdateData(TRUE);
-		m_serialPort->isCRC= m_check_SLIP.GetCheck();
+		m_serialPort->isSLIP= m_check_SLIP.GetCheck();
 
 		CWinThread* pThread = AfxBeginThread(CommThread, m_serialPort); //스레드 시작
 		m_serialPort->m_hThread = pThread->m_hThread; //핸들 저장
@@ -540,11 +540,11 @@ void CSerialPortMFCDlg::OnClickedCheckSlip()
 {
 	UpdateData(TRUE);
 
-	BOOL isCheckCRC = m_check_SLIP.GetCheck();
+	BOOL isCheckSLIP = m_check_SLIP.GetCheck();
 
 	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
 	if(m_serialPort)
 	{
-		m_serialPort->isCRC = isCheckCRC;
+		m_serialPort->isSLIP = isCheckSLIP;
 	}
 }
