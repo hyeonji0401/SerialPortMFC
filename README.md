@@ -1,5 +1,11 @@
 # Serial Port Monitor 예제
 - 해당 프로그램은 간단한 serial port monitor 예제임
 - 전송(TX)는 구현하지 않았고 수신(RX)만 가능함
-- 프로토콜은 ComportMaster 제조사 withrobot에서 제시하는 확장된 SLIP(Extended SLIP)를 기준으로 함
+- Extended SLIP
+  - ComportMaster 제조사 withrobot에서 제시하는 확장된 SLIP(Extended SLIP)를 기준으로 함
+- CRC
+  - CRC-8 표준 룩업 테이블 이용
+  - STX : 0x02
+  - ETX : 0x03
+  - 이스케이프 : ESC(1x1B) 
 - win32 API를 사용함
