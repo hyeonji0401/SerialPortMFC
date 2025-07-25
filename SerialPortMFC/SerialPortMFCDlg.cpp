@@ -325,6 +325,19 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 
 		CWinThread* pThread = AfxBeginThread(CommThread, m_serialPort); //스레드 시작
 		m_serialPort->m_hThread = pThread->m_hThread; //핸들 저장
+		if (pThread)
+		{
+			// 수동 삭제 모드로 설정
+			// 수동 삭제 모드로 설정하지 않으면 이미 자동으로 닫은 핸들을 serialport.cpp에 있는 disconnect()에서 다시 핸들을 닫게 되어 예외가 발생하게 된다
+			pThread->m_bAutoDelete = FALSE;
+			// 스레드 실행 시작
+			pThread->ResumeThread();
+		}
+		else
+		{
+			// 스레드 생성 실패 처리
+			return;
+		}
 
 	}
 	else //연결 실패
