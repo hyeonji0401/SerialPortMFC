@@ -26,7 +26,8 @@ private:
     
 
 public:
-    HANDLE m_hThread; //스레드 핸들
+    //HANDLE m_hThread; 
+    CWinThread* m_pCommThread; //스레드 핸들
     HANDLE m_hComm; // 시리얼 포트 핸들
     DCB m_dcb;
     BOOL m_bThreadRunning; //스레드 동작 여부

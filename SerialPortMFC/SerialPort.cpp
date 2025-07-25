@@ -9,6 +9,7 @@ CSerialPort::CSerialPort()
     m_hComm = INVALID_HANDLE_VALUE;
     m_bThreadRunning = FALSE;
     m_hTargetWnd = NULL;
+    m_pCommThread = nullptr;
 
     //버퍼 초기화
     m_rxBuffer = new CByteArray();
@@ -21,9 +22,28 @@ CSerialPort::CSerialPort()
 
 CSerialPort::~CSerialPort()
 {
+    if (m_bThreadRunning)
+    {
+        m_bThreadRunning = FALSE;
+    }
+
+    if (m_hComm != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(m_hComm);
+        m_hComm = INVALID_HANDLE_VALUE; // 중복으로 닫히는 것을 방지
+    }
+
+    if (m_pCommThread != nullptr)
+    {
+        WaitForSingleObject(m_pCommThread->m_hThread, INFINITE);
+
+        delete m_pCommThread;
+        m_pCommThread = nullptr;
+    }
+
     if (m_rxBuffer) {
-        delete(m_rxBuffer);
-        m_rxBuffer = NULL;
+        delete m_rxBuffer;
+        m_rxBuffer = nullptr;
     }
 }
 
@@ -76,25 +96,7 @@ void CSerialPort::Disconnect()
     if (m_bThreadRunning)
     {
         m_bThreadRunning = FALSE;
-        if (m_hThread != NULL) { //스레드가 끝날 때까지 대기
-            WaitForSingleObject(m_hThread, 2000);
-            CloseHandle(m_hThread);
-            m_hThread = NULL;
-        }
- 
     }
-
-    if (m_hComm != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle(m_hComm); // 포트 핸들 닫기
-        m_hComm = INVALID_HANDLE_VALUE;
-        
-    }
-
-    if (m_rxBuffer) { 
-        m_rxBuffer->RemoveAll();
-    }
-
 
 }
 
@@ -125,8 +127,17 @@ BOOL CSerialPort::Connect(CString portName, DCB& dcb, HWND hWnd)
     m_hTargetWnd = hWnd;      // 메시지를 받을 윈도우 핸들 저장
     m_bThreadRunning = TRUE;  // 스레드 동작 깃발 올리기
 
-    if (m_hComm == INVALID_HANDLE_VALUE) {
-        // 포트 열기 실패
+    m_pCommThread = AfxBeginThread(CommThread, this);
+    if (m_pCommThread)
+    {
+        m_pCommThread->m_bAutoDelete = FALSE; // 수동 삭제 모드
+        m_pCommThread->ResumeThread();
+    }
+    else
+    {
+        // 스레드 생성 실패 
+        CloseHandle(m_hComm);
+        m_hComm = INVALID_HANDLE_VALUE;
         return FALSE;
     }
 
@@ -410,6 +421,7 @@ void CSerialPort::ParseReadDataCRC(BYTE* in, DWORD len)
 
     while (TRUE)
     {
+
         // 패킷의 시작(0x02)을 찾음
         int nStartOfPacket = -1;
         for (i = nScanStartPosition; i < m_rxBuffer->GetSize(); i++) {
