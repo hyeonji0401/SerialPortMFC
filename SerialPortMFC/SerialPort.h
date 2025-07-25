@@ -22,7 +22,7 @@ public:
 
 
 private:
-
+    uint8_t CalculateCRC8(const unsigned char* data, int length);
     
 
 public:
@@ -42,7 +42,9 @@ public:
     CByteArray* m_rxBuffer;
     void ParseReadData(BYTE* in, DWORD len);
     void ParseReadDataLF(BYTE* in, DWORD len);
+    void ParseReadDataCRC(BYTE* in, DWORD len);
     void ParseReadDataChecksum(BYTE* in, DWORD len);
     BOOL isSLIP;
     void ClearRxBuffer();
+    BOOL isCRC;
 };

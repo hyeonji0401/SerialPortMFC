@@ -66,4 +66,6 @@ public:
 	std::ofstream m_file;
 	CButton m_check_SLIP;
 	afx_msg void OnClickedCheckSlip();
+	CButton m_check_crc;
+	afx_msg void OnClickedCheckCrc();
 };

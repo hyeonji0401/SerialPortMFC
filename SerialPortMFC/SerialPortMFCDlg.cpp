@@ -81,6 +81,7 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_RADIO_HEX, m_radio_hex);
 	DDX_Control(pDX, IDC_RADIO_ASCII, m_radio_ascii);
 	DDX_Control(pDX, IDC_CHECK_SLIP, m_check_SLIP);
+	DDX_Control(pDX, IDC_CHECK_CRC, m_check_crc);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -94,6 +95,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_MESSAGE(WM_USER_BUFFER_FULL, &CSerialPortMFCDlg::OnBufferFull)
 	ON_BN_CLICKED(IDC_BTN_PATH, &CSerialPortMFCDlg::OnBnClickedBtnPath)
 	ON_BN_CLICKED(IDC_CHECK_SLIP, &CSerialPortMFCDlg::OnClickedCheckSlip)
+	ON_BN_CLICKED(IDC_CHECK_CRC, &CSerialPortMFCDlg::OnClickedCheckCrc)
 END_MESSAGE_MAP()
 
 
@@ -319,6 +321,7 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 
 		UpdateData(TRUE);
 		m_serialPort->isSLIP= m_check_SLIP.GetCheck();
+		m_serialPort->isCRC = m_check_crc.GetCheck();
 
 		CWinThread* pThread = AfxBeginThread(CommThread, m_serialPort); //스레드 시작
 		m_serialPort->m_hThread = pThread->m_hThread; //핸들 저장
@@ -540,11 +543,49 @@ void CSerialPortMFCDlg::OnClickedCheckSlip()
 {
 	UpdateData(TRUE);
 
-	BOOL isCheckSLIP = m_check_SLIP.GetCheck();
+	BOOL bIsSlipChecked = m_check_SLIP.GetCheck();
 
-	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
-	if(m_serialPort)
+	if (bIsSlipChecked)
 	{
-		m_serialPort->isSLIP = isCheckSLIP;
+		m_check_crc.SetCheck(BST_UNCHECKED); 
+		m_check_crc.EnableWindow(FALSE);    
+	}
+	else // SLIP이 꺼졌다면
+	{
+		m_check_crc.EnableWindow(TRUE);    
+	}
+
+	UpdateData(TRUE);
+
+	if (m_serialPort)
+	{
+		m_serialPort->isSLIP = bIsSlipChecked;
+		m_serialPort->isCRC = m_check_crc.GetCheck(); 
+	}
+}
+
+void CSerialPortMFCDlg::OnClickedCheckCrc()
+{
+	UpdateData(TRUE);
+
+	BOOL bIsCrcChecked = m_check_crc.GetCheck();
+
+	if (bIsCrcChecked)
+	{
+		m_check_SLIP.SetCheck(BST_UNCHECKED); 
+		m_check_SLIP.EnableWindow(FALSE);     
+	}
+	else // CRC가 꺼졌다면
+	{
+		m_check_SLIP.EnableWindow(TRUE);      
+	}
+
+	UpdateData(TRUE);
+
+	
+	if (m_serialPort)
+	{
+		m_serialPort->isCRC = bIsCrcChecked;
+		m_serialPort->isSLIP = m_check_SLIP.GetCheck(); 
 	}
 }
