@@ -14,9 +14,6 @@ CSerialPort::CSerialPort()
     //버퍼 초기화
     m_rxBuffer = new CByteArray();
 
-    isSLIP = FALSE;
-    isCRC = FALSE;
-
 
 }
 
@@ -40,6 +37,7 @@ CSerialPort::~CSerialPort()
         delete m_pCommThread;
         m_pCommThread = nullptr;
     }
+
 
     if (m_rxBuffer) {
         delete m_rxBuffer;
@@ -343,21 +341,6 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
 
 void CSerialPort::ParseReadData(BYTE* in, DWORD len)
 {
-    //  SLIP 모드가 켜져 있는지 확인
-    if (isSLIP)
-    {
-        ParseReadDataChecksum(in, len);
-        return; // SLIP 파서가 일을 마쳤으므로 여기서 종료
-    }
-
-    if (isCRC)
-    {
-        ParseReadDataCRC(in, len);
-        return;
-    }
-
-    // SLIP, CRC 모드가 아니라면 (단순 표시 모드),
-    //  아무것도 해석하지 않고 받은 데이터를 그대로 UI 스레드로 보냄
     if (len > 0)
     {
         // UI 스레드에서 delete[] 할 수 있도록 메모리를 새로 할당하여 데이터를 복사
@@ -367,6 +350,47 @@ void CSerialPort::ParseReadData(BYTE* in, DWORD len)
         // UI 스레드로 데이터 덩어리를 그대로 전송
         ::PostMessage(m_hTargetWnd, WM_USER_RX_DATA, (WPARAM)len, (LPARAM)pPacketData);
     }
+}
+
+BOOL CSerialPort::Write(BYTE* pData, DWORD dwSize)
+{
+    OVERLAPPED overlap; // 비동기 입력 및 출력에 사용되는 정보
+
+    memset(&overlap, 0, sizeof(overlap));
+    overlap.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); 
+    if (overlap.hEvent == NULL)
+    {
+        return -1;
+    }
+    if(m_hComm == INVALID_HANDLE_VALUE)
+    {
+        return FALSE;
+    }
+
+    DWORD dwBytesWritten = 0;
+
+ 
+    BOOL bSuccess = WriteFile(m_hComm, pData, dwSize, &dwBytesWritten, &overlap);
+
+    
+    if (bSuccess)
+    {
+        return dwBytesWritten == dwSize;
+    }
+
+    if (GetLastError() == ERROR_IO_PENDING)
+    {
+        if (GetOverlappedResult(m_hComm, &overlap, &dwBytesWritten, TRUE))
+        {
+            return dwBytesWritten == dwSize;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+    CloseHandle(overlap.hEvent);
+    return FALSE;
 }
 
 
@@ -403,7 +427,7 @@ uint8_t CSerialPort::CalculateCRC8(const unsigned char* data, int length)
 
 
 // CRC
-void CSerialPort::ParseReadDataCRC(BYTE* in, DWORD len)
+/*void CSerialPort::ParseReadDataCRC(BYTE* in, DWORD len)
 {
     int i = 0;
 
@@ -506,7 +530,7 @@ void CSerialPort::ParseReadDataCRC(BYTE* in, DWORD len)
     {
         m_rxBuffer->RemoveAt(0, nScanStartPosition);
     }
-}
+}*/
 
 // 끝이 CR/LF만 오는 경우 
 /*
@@ -570,7 +594,7 @@ void CSerialPort::ParseReadDataLF(BYTE* in, DWORD len)
 
 }*/
 
-void CSerialPort::ParseReadDataChecksum(BYTE* in, DWORD len)
+/*void CSerialPort::ParseReadDataChecksum(BYTE* in, DWORD len)
 {
     int i=0;
 
@@ -674,4 +698,4 @@ void CSerialPort::ParseReadDataChecksum(BYTE* in, DWORD len)
     {
         m_rxBuffer->RemoveAt(0, nScanStartPosition);
     }
-}
+}*/

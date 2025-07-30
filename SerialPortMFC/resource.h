@@ -12,6 +12,7 @@
 #define IDC_BTN_SETTING                 1011
 #define IDC_BTN_CONNECT                 1012
 #define IDC_EDIT_REV                    1015
+#define IDC_EDIT_HEX                    1015
 #define IDC_STATIC_REV                  1016
 #define IDC_BUTTON_CLR                  1017
 #define IDC_EDIT_SETTING                1018
@@ -20,7 +21,9 @@
 #define IDC_RADIO_HEX                   1021
 #define IDC_RADIO_ASCII                 1022
 #define IDC_CHECK_SLIP                  1024
-#define IDC_CHECK_CRC                   1025
+#define IDC_EDIT_SEND                   1027
+#define IDC_BTN_SEND                    1028
+#define IDC_EDIT_ASCII                  1029
 
 // Next default values for new objects
 // 
@@ -28,7 +31,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        130
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1027
+#define _APS_NEXT_CONTROL_VALUE         1030
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

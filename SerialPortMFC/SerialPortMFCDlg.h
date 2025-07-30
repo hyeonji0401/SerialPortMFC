@@ -51,7 +51,6 @@ public:
 	afx_msg void OnClickedBtnConnect();
 	CButton m_btn_setting;
 	afx_msg void OnClickedBtnSetting();
-	CString m_edit_rev;
 	CButton m_btn_clear;
 	afx_msg void OnClickedButtonClr();
 	BOOL m_bIsSettingDone;
@@ -64,8 +63,8 @@ public:
 	CButton m_radio_hex;
 	CButton m_radio_ascii;
 	std::ofstream m_file;
-	CButton m_check_SLIP;
-	afx_msg void OnClickedCheckSlip();
-	CButton m_check_crc;
-	afx_msg void OnClickedCheckCrc();
+	afx_msg void OnClickedBtnSend();
+	CEdit m_edit_rev_hex;
+	CEdit m_edit_rev_ascii;
+	CEdit m_edit_send;
 };

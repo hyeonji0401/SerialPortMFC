@@ -61,7 +61,6 @@ END_MESSAGE_MAP()
 
 CSerialPortMFCDlg::CSerialPortMFCDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_SERIALPORTMFC_DIALOG, pParent)
-	, m_edit_rev(_T(""))
 	, m_edit_path(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
@@ -73,15 +72,15 @@ void CSerialPortMFCDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_COMBO_PORTNAME, m_cmb_PortName);
 	DDX_Control(pDX, IDC_BTN_SETTING, m_btn_setting);
-	DDX_Text(pDX, IDC_EDIT_REV, m_edit_rev);
 	DDX_Control(pDX, IDC_BUTTON_CLR, m_btn_clear);
 	DDX_Control(pDX, IDC_EDIT_SETTING, m_edit_setting);
 	DDX_Control(pDX, IDC_BTN_PATH, m_btn_path);
 	DDX_Text(pDX, IDC_EDIT_PATH, m_edit_path);
 	DDX_Control(pDX, IDC_RADIO_HEX, m_radio_hex);
 	DDX_Control(pDX, IDC_RADIO_ASCII, m_radio_ascii);
-	DDX_Control(pDX, IDC_CHECK_SLIP, m_check_SLIP);
-	DDX_Control(pDX, IDC_CHECK_CRC, m_check_crc);
+	DDX_Control(pDX, IDC_EDIT_HEX, m_edit_rev_hex);
+	DDX_Control(pDX, IDC_EDIT_ASCII, m_edit_rev_ascii);
+	DDX_Control(pDX, IDC_EDIT_SEND, m_edit_send);
 }
 
 BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
@@ -94,8 +93,7 @@ BEGIN_MESSAGE_MAP(CSerialPortMFCDlg, CDialogEx)
 	ON_MESSAGE(WM_USER_RX_DATA, &CSerialPortMFCDlg::OnReceiveData)
 	ON_MESSAGE(WM_USER_BUFFER_FULL, &CSerialPortMFCDlg::OnBufferFull)
 	ON_BN_CLICKED(IDC_BTN_PATH, &CSerialPortMFCDlg::OnBnClickedBtnPath)
-	ON_BN_CLICKED(IDC_CHECK_SLIP, &CSerialPortMFCDlg::OnClickedCheckSlip)
-	ON_BN_CLICKED(IDC_CHECK_CRC, &CSerialPortMFCDlg::OnClickedCheckCrc)
+	ON_BN_CLICKED(IDC_BTN_SEND, &CSerialPortMFCDlg::OnClickedBtnSend)
 END_MESSAGE_MAP()
 
 
@@ -134,7 +132,6 @@ BOOL CSerialPortMFCDlg::OnInitDialog()
 	 // 사용 가능한 포트 목록을 가져옴
 	m_radio_ascii.SetCheck(BST_CHECKED);
 
-	m_check_SLIP.SetCheck(0);
 
 	//저장된 가장 최근 파일 저장 장소 불러옴
 	m_edit_path = AfxGetApp()->GetProfileString(_T("Settings"), _T("LastSavePath"), _T(""));
@@ -245,7 +242,8 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
 		m_cmb_PortName.EnableWindow(TRUE);
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(TRUE);
-		m_edit_rev.Empty();
+		m_edit_rev_hex.SetWindowText(_T(""));
+		m_edit_rev_ascii.SetWindowText(_T(""));
 		m_edit_setting.SetWindowText(_T(" "));
 		m_edit_setting.Invalidate();
 		UpdateData(FALSE);
@@ -287,7 +285,8 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 			delete m_serialPort;
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
-			m_edit_rev.Empty();
+			m_edit_rev_hex.SetWindowText(_T(""));
+			m_edit_rev_ascii.SetWindowText(_T(""));
 			m_edit_setting.SetWindowText(_T(" "));
 			m_edit_setting.Invalidate();
 			UpdateData(FALSE);
@@ -320,8 +319,6 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		GetDlgItem(IDC_BTN_SETTING)->EnableWindow(FALSE);
 
 		UpdateData(TRUE);
-		m_serialPort->isSLIP= m_check_SLIP.GetCheck();
-		m_serialPort->isCRC = m_check_crc.GetCheck();
 
 		
 
@@ -332,7 +329,8 @@ void CSerialPortMFCDlg::OnClickedBtnConnect()
 		delete m_serialPort;
 		m_serialPort = NULL;
 		GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
-		m_edit_rev.Empty();
+		m_edit_rev_hex.SetWindowText(_T(""));
+		m_edit_rev_ascii.SetWindowText(_T(""));
 		m_edit_setting.SetWindowText(_T(" "));
 		m_edit_setting.Invalidate();
 		UpdateData(FALSE);
@@ -365,7 +363,8 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			m_serialPort->Disconnect();
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
-			m_edit_rev.Empty();
+			m_edit_rev_hex.SetWindowText(_T(""));
+			m_edit_rev_ascii.SetWindowText(_T(""));
 			m_edit_setting.SetWindowText(" ");
 			m_edit_setting.Invalidate();
 			UpdateData(FALSE);
@@ -389,7 +388,8 @@ void CSerialPortMFCDlg::OnClickedBtnSetting()
 			delete m_serialPort;
 			m_serialPort = NULL;
 			GetDlgItem(IDC_BTN_CONNECT)->SetWindowText(_T("연결"));
-			m_edit_rev.Empty();
+			m_edit_rev_hex.SetWindowText(_T(""));
+			m_edit_rev_ascii.SetWindowText(_T(""));
 			m_edit_setting.SetWindowText(_T(" "));
 			m_edit_setting.Invalidate();
 			UpdateData(FALSE);
@@ -467,46 +467,65 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 
 	UpdateData(TRUE);
 
-	CString strToShow;
+	CString strToShowHex;
+	CString strToShowAscii;
+	
 
-	if (m_radio_hex.GetCheck() == BST_CHECKED) //HEX를 선택했을 경우
+	for (int i = 0; i < length; i++)
 	{
-		for (int i = 0; i < length; i++)
-		{
-			CString temp;
-			temp.Format(_T("%02X "), data[i]);
-			strToShow += temp;
-		}
+		CString temp;
+		temp.Format(_T("%02X "), data[i]);
+		strToShowHex += temp;
 	}
-	else if (m_radio_ascii.GetCheck()==BST_CHECKED) //ASCII를 선택했을 경우
-	{
-		strToShow = CString((char*)data, length);
-	}
+
+	strToShowAscii = CString((char*)data, length);
 
 	// 수신 에디트 컨트롤의 포인터를 얻어옴
-	CEdit* pEditRev = (CEdit*)GetDlgItem(IDC_EDIT_REV);
-	if (pEditRev == NULL) {
+	CEdit* pEditRevHex = (CEdit*)GetDlgItem(IDC_EDIT_HEX);
+	CEdit* pEditRevAscii = (CEdit*)GetDlgItem(IDC_EDIT_ASCII);
+
+	if (pEditRevHex == NULL) {
+		delete[] data;
+		return 0;
+	}
+
+	if (pEditRevAscii == NULL) {
 		delete[] data;
 		return 0;
 	}
 
 	//  에디트 컨트롤의 텍스트가 너무 길어지면 자동으로 비워주기
 	const int MAX_EDIT_LEN = 1024 * 1024;
-	if (pEditRev->GetWindowTextLength() > MAX_EDIT_LEN)
+	if (pEditRevHex->GetWindowTextLength() > MAX_EDIT_LEN)
 	{
-		pEditRev->SetWindowText(_T("")); // 텍스트 클리어
+		pEditRevHex->SetWindowText(_T("")); // 텍스트 클리어
+	}
+
+	if (pEditRevAscii->GetWindowTextLength() > MAX_EDIT_LEN)
+	{
+		pEditRevAscii->SetWindowText(_T("")); // 텍스트 클리어
 	}
 
 	// 현재 텍스트의 끝 부분으로 커서를 이동
-	int nLen = pEditRev->GetWindowTextLength();
-	pEditRev->SetSel(nLen, nLen); //시작, 끝
+	int nLenHex = pEditRevHex->GetWindowTextLength();
+	pEditRevHex->SetSel(nLenHex, nLenHex); //시작, 끝
+
+	int nLenAscii = pEditRevAscii->GetWindowTextLength();
+	pEditRevAscii->SetSel(nLenAscii, nLenAscii); //시작, 끝
+
 
 	// 새로 받은 텍스트를 직접 추가
-	pEditRev->ReplaceSel(strToShow+"\r\n");
-	pEditRev->LineScroll(pEditRev->GetLineCount()); //가장 끝으로 커서 옮김
+	pEditRevHex->ReplaceSel(strToShowHex);
+	pEditRevHex->LineScroll(pEditRevHex->GetLineCount()); //가장 끝으로 커서 옮김
 
-	std::string str = strToShow.GetString();
-	saveData(str);
+	pEditRevAscii->ReplaceSel(strToShowAscii);
+	pEditRevAscii->LineScroll(pEditRevAscii->GetLineCount()); //가장 끝으로 커서 옮김
+
+	std::string strHex = strToShowHex.GetString();
+	saveData(strHex);
+
+	std::string strAscii = strToShowAscii.GetString();
+	saveData(strAscii);
 
 	// 스레드에서 new로 할당했던 메모리를 여기서 반드시 해제해야 함
 	delete[] data;
@@ -518,7 +537,8 @@ LRESULT CSerialPortMFCDlg::OnReceiveData(WPARAM wParam, LPARAM lParam)
 void CSerialPortMFCDlg::OnClickedButtonClr()
 {
 	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
-	m_edit_rev.Empty();
+	m_edit_rev_hex.SetWindowText(_T(""));
+	m_edit_rev_ascii.SetWindowText(_T(""));
 	UpdateData(FALSE);
 
 }
@@ -536,55 +556,59 @@ LRESULT CSerialPortMFCDlg::OnBufferFull(WPARAM wParam, LPARAM lParam)
 
 
 
-// Extended SLIP 파서, 디코딩 적용 여부
-
-void CSerialPortMFCDlg::OnClickedCheckSlip()
+void CSerialPortMFCDlg::OnClickedBtnSend()
 {
-	UpdateData(TRUE);
+	
+	CString strToSend;
+	m_edit_send.GetWindowText(strToSend);
 
-	BOOL bIsSlipChecked = m_check_SLIP.GetCheck();
-
-	if (bIsSlipChecked)
+	if (strToSend.IsEmpty())
 	{
-		m_check_crc.SetCheck(BST_UNCHECKED); 
-		m_check_crc.EnableWindow(FALSE);    
-	}
-	else // SLIP이 꺼졌다면
-	{
-		m_check_crc.EnableWindow(TRUE);    
+		AfxMessageBox(_T("전송할 문자를 입력해주세요"));
+		return; 
 	}
 
-	UpdateData(TRUE);
-
-	if (m_serialPort)
+	if (m_serialPort == nullptr)
 	{
-		m_serialPort->isSLIP = bIsSlipChecked;
-		m_serialPort->isCRC = m_check_crc.GetCheck(); 
+		AfxMessageBox(_T("포트가 열려있지 않습니다"));
+		return;
 	}
-}
-
-void CSerialPortMFCDlg::OnClickedCheckCrc()
-{
-	UpdateData(TRUE);
-
-	BOOL bIsCrcChecked = m_check_crc.GetCheck();
-
-	if (bIsCrcChecked)
-	{
-		m_check_SLIP.SetCheck(BST_UNCHECKED); 
-		m_check_SLIP.EnableWindow(FALSE);     
-	}
-	else // CRC가 꺼졌다면
-	{
-		m_check_SLIP.EnableWindow(TRUE);      
-	}
-
-	UpdateData(TRUE);
+	
+	BYTE* pSendData = nullptr;
+	int nLength = 0;
 
 	
-	if (m_serialPort)
+	if (m_radio_ascii.GetCheck() == BST_CHECKED) 
 	{
-		m_serialPort->isCRC = bIsCrcChecked;
-		m_serialPort->isSLIP = m_check_SLIP.GetCheck(); 
+		// CString을 char*로 변환
+		nLength = strToSend.GetLength();
+		pSendData = (BYTE*)strToSend.GetBuffer();
+		m_serialPort->Write(pSendData, nLength);
 	}
+	else if(m_radio_hex.GetCheck()==BST_CHECKED)
+	{
+		strToSend.Remove(' ');
+
+		// 문자열 길이가 홀수이면 에러 (두 글자씩 짝이 맞아야 함)
+		if (strToSend.GetLength() % 2 != 0)
+		{
+			AfxMessageBox(_T("HEX 값은 두 자리씩 짝을 맞춰 입력해주세요. (예: 41 42 43)"));
+			return;
+		}
+
+		std::vector<BYTE> bytesToSend;
+		for (int i = 0; i < strToSend.GetLength(); i += 2)
+		{
+			CString singleByteStr = strToSend.Mid(i, 2);
+			BYTE byteValue = (BYTE)_tcstol(singleByteStr, NULL, 16);
+			bytesToSend.push_back(byteValue);
+		}
+
+		if (!bytesToSend.empty())
+		{
+			m_serialPort->Write(bytesToSend.data(), bytesToSend.size());
+		}
+
+	}
+
 }

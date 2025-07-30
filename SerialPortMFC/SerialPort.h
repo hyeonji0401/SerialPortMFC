@@ -45,7 +45,6 @@ public:
     void ParseReadDataLF(BYTE* in, DWORD len);
     void ParseReadDataCRC(BYTE* in, DWORD len);
     void ParseReadDataChecksum(BYTE* in, DWORD len);
-    BOOL isSLIP;
     void ClearRxBuffer();
-    BOOL isCRC;
+    BOOL Write(BYTE* pData, DWORD dwSize);
 };
